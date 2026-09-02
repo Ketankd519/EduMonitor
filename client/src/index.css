@@ -1,0 +1,28 @@
+/* Global reset + base academic theme variables (fleshed out fully in later phases) */
+:root {
+  --color-primary: #1e3a8a;   /* academic blue */
+  --color-secondary: #16a34a; /* green */
+  --color-bg: #f8fafc;
+  --color-warning: #f97316;
+  --color-danger: #dc2626;
+  --color-success: #16a34a;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-bg);
+  color: #1e293b;
+  line-height: 1.5;
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
