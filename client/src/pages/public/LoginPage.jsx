@@ -1,17 +1,33 @@
+
 import React, { useState, useContext } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../../context/AuthContext';
-import { LogIn, AlertCircle } from 'lucide-react';
-import '../../styles/theme.css';
+import { AlertCircle, GraduationCap } from 'lucide-react';
+import './Auth.css';
+
+import loginBg from '../../assets/login-bg.png';
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { login } = useContext(AuthContext);
+  const { login, user } = useContext(AuthContext);
   const navigate = useNavigate();
+
+  React.useEffect(() => {
+    if (user) {
+      const role = (user.role || '').toUpperCase();
+
+      if (role === 'TEACHER') {
+        navigate('/teacher/dashboard', { replace: true });
+      } else {
+        navigate('/student/dashboard', { replace: true });
+      }
+    }
+  }, [user, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -19,57 +35,143 @@ const LoginPage = () => {
     setLoading(true);
 
     try {
-      const res = await login(email, password);
-      if (res.user.role === 'TEACHER') {
-        navigate('/teacher/dashboard');
+      const res = await login(email, password, rememberMe);
+      const role = (res?.user?.role || '').toUpperCase();
+
+      if (role === 'TEACHER') {
+        navigate('/teacher/dashboard', { replace: true });
       } else {
-        navigate('/student/dashboard');
+        navigate('/student/dashboard', { replace: true });
       }
     } catch (err) {
-      setError(err.response?.data?.message || 'Login failed. Please check credentials.');
+      setError(
+        err.response?.data?.message ||
+        'Login failed. Please check credentials.'
+      );
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-light)', padding: '1rem' }}>
-      <div style={{ background: '#fff', width: '100%', maxWidth: '400px', padding: '2.5rem', borderRadius: '12px', boxShadow: 'var(--shadow-lg)' }}>
-        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <LogIn size={40} color="var(--primary-blue)" />
-          <h2 style={{ color: 'var(--primary-blue)', margin: '0.5rem 0 0' }}>Welcome Back</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '0.25rem' }}>Login to your EduMonitor account</p>
-        </div>
+    <div
+      className="auth-layout-fullscreen"
+      style={{ backgroundImage: `url(${loginBg})` }}
+    >
+      {/* Floating Logo */}
+      <div className="auth-brand-absolute">
+        <GraduationCap size={36} className="brand-icon" />
+        <Link to="/" className="forgot-brand-link">
+          <span>EduMonitor</span>
+        </Link>
+      </div>
 
-        {error && (
-          <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', padding: '0.75rem', borderRadius: '6px', color: 'var(--danger-red)', display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
-            <AlertCircle size={18} />
-            <span>{error}</span>
+      {/* Right Panel with Dark Blur */}
+      <div className="auth-glass-panel">
+        <div className="auth-card">
+          <div className="auth-header">
+            <h2>
+              Welcome <span>Back</span>
+            </h2>
+            <p>
+              Welcome to this information team in your academic universe.
+            </p>
           </div>
-        )}
 
-        <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: '1.25rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: '500', fontSize: '0.9rem' }}>Email Address</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required style={{ width: '100%', padding: '0.65rem', borderRadius: '6px', border: '1px solid var(--border-color)' }} />
-          </div>
-
-          <div style={{ marginBottom: '1rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
-              <label style={{ fontWeight: '500', fontSize: '0.9rem' }}>Password</label>
-              <Link to="/forgot-password" style={{ fontSize: '0.85rem', color: 'var(--primary-blue)', textDecoration: 'none' }}>Forgot?</Link>
+          {error && (
+            <div className="auth-error">
+              <AlertCircle size={18} />
+              <span>{error}</span>
             </div>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required style={{ width: '100%', padding: '0.65rem', borderRadius: '6px', border: '1px solid var(--border-color)' }} />
+          )}
+
+          <form onSubmit={handleSubmit} className="auth-form">
+            <div className="form-group full-width">
+              <label>Email Address</label>
+              <input
+                type="email"
+                placeholder="Email Address"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="form-group full-width">
+              <label>Password</label>
+              <div className="password-input-wrapper">
+                <input
+                  type="password"
+                  placeholder="Password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="login-options-row">
+              <label className="login-remember-me">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                />
+                <span>Remember me</span>
+              </label>
+
+              <div className="login-forgot-password">
+                <Link to="/forgot-password">
+                  Forgot Password?
+                </Link>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="btn-auth-submit"
+            >
+              {loading ? 'Authenticating...' : 'Login'}
+            </button>
+          </form>
+
+          {/* Divider */}
+          <div className="login-divider">
+            <div className="login-divider-line" />
+            <span className="login-divider-text">or</span>
+            <div className="login-divider-line" />
           </div>
 
-          <button type="submit" disabled={loading} style={{ width: '100%', background: 'var(--primary-blue)', color: '#fff', border: 'none', padding: '0.75rem', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', marginTop: '0.5rem' }}>
-            {loading ? 'Authenticating...' : 'Login'}
-          </button>
-        </form>
+          {/* Social Login Buttons */}
+          <div className="auth-social login-social">
+            <button type="button" className="social-btn" aria-label="Google login">
+              <img
+                src="https://cdn-icons-png.flaticon.com/512/2991/2991148.png"
+                alt="Google"
+              />
+            </button>
 
-        <p style={{ textAlign: 'center', marginTop: '1.5rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-          Don't have an account? <Link to="/register" style={{ color: 'var(--primary-blue)', textDecoration: 'none', fontWeight: '600' }}>Register</Link>
-        </p>
+            <button type="button" className="social-btn" aria-label="Microsoft login">
+              <img
+                src="https://cdn-icons-png.flaticon.com/512/732/732221.png"
+                alt="Microsoft"
+              />
+            </button>
+
+            <button type="button" className="social-btn" aria-label="Apple login">
+              <img
+                src="https://cdn-icons-png.flaticon.com/512/0/747.png"
+                alt="Apple"
+              />
+            </button>
+          </div>
+
+          {/* Footer Link */}
+          <div className="auth-footer">
+            Don't have an account? <Link to="/register">Register</Link>
+          </div>
+        </div>
       </div>
     </div>
   );

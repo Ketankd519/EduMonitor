@@ -3,6 +3,8 @@ const {
   createClass,
   joinClass,
   getMyClasses,
+  getClassById,
+  getClassRoster,
   leaveClass,
   deleteClass
 } = require('../controllers/classController');
@@ -14,6 +16,8 @@ const router = express.Router();
 router.use(protect);
 
 router.get('/', getMyClasses);
+router.get('/:classId', getClassById);
+router.get('/:classId/roster', authorize('TEACHER'), getClassRoster);
 router.post('/', authorize('TEACHER'), createClass);
 router.post('/join', authorize('STUDENT'), joinClass);
 router.post('/:classId/leave', authorize('STUDENT'), leaveClass);

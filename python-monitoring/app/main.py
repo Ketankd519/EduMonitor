@@ -1,39 +1,33 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
-import os
-
-from app.routes import health, analyze
-
-load_dotenv()
+from app.routes import health, frame_analysis
 
 app = FastAPI(
-    title="EduMonitor AI Monitoring Service",
-    description=(
-        "Independent computer-vision microservice for the EduMonitor virtual "
-        "classroom. Analyzes individual browser-captured frames (not video "
-        "streams) for face presence, gaze/head-orientation, and phone "
-        "detection. Frames are processed in-memory and discarded — only "
-        "derived event data is returned to the Node.js backend."
-    ),
-    version="0.1.0",
+    title="EduMonitor AI Computer Vision Service",
+    description="Microservice providing real-time face detection, head orientation, and YOLO distraction detection",
+    version="1.0.0"
 )
 
-# Node server is the only expected caller; restrict CORS accordingly.
-allowed_origin = os.getenv("NODE_SERVER_URL", "http://localhost:5000")
+# CORS setup for React client and Node backend
+origins = [
+    "http://localhost:5173",
+    "http://localhost:5000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5000"
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[allowed_origin],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# Mount Routes
 app.include_router(health.router)
-app.include_router(analyze.router)
+app.include_router(frame_analysis.router)
 
-
-@app.get("/")
-def root():
-    return {"service": "edumonitor-ai-monitoring", "status": "ok"}
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

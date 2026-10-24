@@ -1,5 +1,6 @@
+
 import React, { useEffect, useState, useContext } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../context/AuthContext';
 import API from '../../services/api';
 import Navbar from '../../components/layout/Navbar';
@@ -13,41 +14,60 @@ import {
   Download,
   Video,
   User,
-  Paperclip,
+  Users,
+  Image,
+  X,
   CheckCircle,
   AlertCircle
 } from 'lucide-react';
+import './style.css';
+import PostImageCarousel from '../../components/classroom/PostImageCarousel';
 
 const ClassroomView = () => {
   const { classId } = useParams();
+  const navigate = useNavigate();
   const { user } = useContext(AuthContext);
   const isTeacher = user?.role === 'TEACHER';
 
   const [classDetails, setClassDetails] = useState(null);
-  const [activeTab, setActiveTab] = useState('stream'); // 'stream' | 'notes'
+  const [activeTab, setActiveTab] = useState('stream');
   const [posts, setPosts] = useState([]);
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Input states
   const [newPostContent, setNewPostContent] = useState('');
+  const [postImages, setPostImages] = useState([]);
+  const [postPreviews, setPostPreviews] = useState([]);
+  const [submittingPost, setSubmittingPost] = useState(false);
+  const [expandedImage, setExpandedImage] = useState(null);
+
+  // Teacher-only student roster state
+  const [showRosterModal, setShowRosterModal] = useState(false);
+  const [roster, setRoster] = useState([]);
+  const [rosterLoading, setRosterLoading] = useState(false);
+  const [rosterError, setRosterError] = useState('');
+
   const [commentInputs, setCommentInputs] = useState({});
 
-  // Note Upload states
   const [showNoteModal, setShowNoteModal] = useState(false);
   const [noteTitle, setNoteTitle] = useState('');
   const [noteDesc, setNoteDesc] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
 
-  const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [liveClassError, setLiveClassError] = useState('');
+  const [checkingLiveClass, setCheckingLiveClass] = useState(false);
+
+  const backendBase = (API.defaults?.baseURL || 'http://localhost:5000/api').replace(/\/api\/?$/, '');
 
   useEffect(() => {
     fetchClassroomData();
   }, [classId]);
 
   const fetchClassroomData = async () => {
+    setLoading(true);
+
     try {
       const classRes = await API.get(`/classes/${classId}`);
       setClassDetails(classRes.data.class || classRes.data);
@@ -57,54 +77,175 @@ const ClassroomView = () => {
 
       const notesRes = await API.get(`/notes/class/${classId}`);
       setNotes(notesRes.data.notes || []);
+      setError('');
     } catch (err) {
-      setError('Failed to load classroom data.');
+      setError(err.response?.data?.message || 'Failed to load classroom data.');
     } finally {
       setLoading(false);
     }
   };
 
-  // --- Post Handlers ---
+  const handleLiveClassClick = async () => {
+    setLiveClassError('');
+
+    if (isTeacher) {
+      navigate(`/live-class/${classId}`);
+      return;
+    }
+
+    if (checkingLiveClass) return;
+
+    setCheckingLiveClass(true);
+    try {
+      const response = await API.get(`/live-classes/active/${classId}`);
+      const { success, liveSession, message } = response.data;
+
+      if (!success) {
+        setLiveClassError(message || 'Unable to check for an active live class session.');
+      } else if (!liveSession || liveSession.status !== 'LIVE') {
+        setLiveClassError('No active live class session found for this classroom.');
+      } else {
+        navigate(`/live-class/${classId}`);
+      }
+    } catch (err) {
+      setLiveClassError(
+        err.response?.data?.message ||
+          'Unable to check for an active live class session. Please try again.'
+      );
+    } finally {
+      setCheckingLiveClass(false);
+    }
+  };
+
+  const handleOpenRoster = async () => {
+    setShowRosterModal(true);
+    setRosterLoading(true);
+    setRosterError('');
+    try {
+      const res = await API.get(`/classes/${classId}/roster`);
+      setRoster(res.data.roster || []);
+    } catch (err) {
+      setRosterError(err.response?.data?.message || 'Failed to load classroom roster.');
+    } finally {
+      setRosterLoading(false);
+    }
+  };
+
+  const handleImageChange = (e) => {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    const validFiles = [];
+
+    for (const file of files) {
+      if (!validTypes.includes(file.type)) {
+        alert(`File '${file.name}' is not a valid image. Only JPG, PNG, WEBP, and GIF are supported.`);
+        continue;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        alert(`File '${file.name}' exceeds the 10MB maximum image limit.`);
+        continue;
+      }
+      if (postImages.length + validFiles.length >= 5) {
+        alert('You can attach a maximum of 5 images per post.');
+        break;
+      }
+      validFiles.push(file);
+    }
+
+    if (validFiles.length > 0) {
+      const updatedImages = [...postImages, ...validFiles];
+      setPostImages(updatedImages);
+
+      const newPreviews = validFiles.map((file) => URL.createObjectURL(file));
+      setPostPreviews((prev) => [...prev, ...newPreviews]);
+    }
+
+    e.target.value = '';
+  };
+
+  const handleRemoveImage = (index) => {
+    if (postPreviews[index]) {
+      URL.revokeObjectURL(postPreviews[index]);
+    }
+    setPostImages((prev) => prev.filter((_, i) => i !== index));
+    setPostPreviews((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleCreatePost = async (e) => {
     e.preventDefault();
-    if (!newPostContent.trim()) return;
+    if (!newPostContent.trim() && postImages.length === 0) return;
 
+    setSubmittingPost(true);
     try {
-      const res = await API.post('/posts', { classId, content: newPostContent });
-      setPosts([res.data.post, ...posts]);
+      let res;
+      if (postImages.length > 0) {
+        const formData = new FormData();
+        formData.append('classId', classId);
+        formData.append('content', newPostContent.trim());
+        postImages.forEach((img) => formData.append('images', img));
+
+        res = await API.post('/posts', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+      } else {
+        res = await API.post('/posts', {
+          classId,
+          content: newPostContent.trim()
+        });
+      }
+
+      setPosts((previous) => [res.data.post, ...previous]);
       setNewPostContent('');
+      postPreviews.forEach((url) => URL.revokeObjectURL(url));
+      setPostImages([]);
+      setPostPreviews([]);
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to post announcement.');
+    } finally {
+      setSubmittingPost(false);
     }
   };
 
   const handleDeletePost = async (postId) => {
     if (!window.confirm('Delete this announcement?')) return;
+
     try {
       await API.delete(`/posts/${postId}`);
-      setPosts(posts.filter((p) => p._id !== postId));
+      setPosts((previous) => previous.filter((p) => p._id !== postId));
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to delete post.');
     }
   };
 
-  // --- Comment Handlers ---
   const handleAddComment = async (e, postId) => {
     e.preventDefault();
+
     const commentText = commentInputs[postId];
-    if (!commentText || !commentText.trim()) return;
+    if (!commentText?.trim()) return;
 
     try {
-      const res = await API.post('/comments', { postId, content: commentText });
-      setPosts(
-        posts.map((p) => {
-          if (p._id === postId) {
-            return { ...p, comments: [...p.comments, res.data.comment] };
-          }
-          return p;
-        })
+      const res = await API.post('/comments', {
+        postId,
+        content: commentText
+      });
+
+      setPosts((previous) =>
+        previous.map((post) =>
+          post._id === postId
+            ? {
+                ...post,
+                comments: [...(post.comments || []), res.data.comment]
+              }
+            : post
+        )
       );
-      setCommentInputs({ ...commentInputs, [postId]: '' });
+
+      setCommentInputs((previous) => ({
+        ...previous,
+        [postId]: ''
+      }));
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to add comment.');
     }
@@ -113,23 +254,31 @@ const ClassroomView = () => {
   const handleDeleteComment = async (postId, commentId) => {
     try {
       await API.delete(`/comments/${commentId}`);
-      setPosts(
-        posts.map((p) => {
-          if (p._id === postId) {
-            return { ...p, comments: p.comments.filter((c) => c._id !== commentId) };
-          }
-          return p;
-        })
+
+      setPosts((previous) =>
+        previous.map((post) =>
+          post._id === postId
+            ? {
+                ...post,
+                comments: post.comments.filter(
+                  (comment) => comment._id !== commentId
+                )
+              }
+            : post
+        )
       );
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to delete comment.');
     }
   };
 
-  // --- Note Upload Handlers ---
   const handleUploadNote = async (e) => {
     e.preventDefault();
-    if (!selectedFile) return alert('Please select a file to upload.');
+
+    if (!selectedFile) {
+      alert('Please select a file to upload.');
+      return;
+    }
 
     const formData = new FormData();
     formData.append('classId', classId);
@@ -138,11 +287,13 @@ const ClassroomView = () => {
     formData.append('file', selectedFile);
 
     setUploading(true);
+
     try {
       const res = await API.post('/notes', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      setNotes([res.data.note, ...notes]);
+
+      setNotes((previous) => [res.data.note, ...previous]);
       setShowNoteModal(false);
       setNoteTitle('');
       setNoteDesc('');
@@ -156,9 +307,10 @@ const ClassroomView = () => {
 
   const handleDeleteNote = async (noteId) => {
     if (!window.confirm('Delete this course material?')) return;
+
     try {
       await API.delete(`/notes/${noteId}`);
-      setNotes(notes.filter((n) => n._id !== noteId));
+      setNotes((previous) => previous.filter((note) => note._id !== noteId));
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to delete note.');
     }
@@ -166,190 +318,292 @@ const ClassroomView = () => {
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', background: 'var(--bg-light)' }}>
+      <div className="classroom-page">
         <Navbar />
-        <div style={{ display: 'flex' }}>
+        <div className="classroom-layout">
           <Sidebar />
-          <main style={{ padding: '2rem' }}>Loading Virtual Classroom...</main>
+          <main className="classroom-main classroom-loading">
+            Loading Virtual Classroom...
+          </main>
         </div>
       </div>
     );
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-light)' }}>
+    <div className="classroom-page">
       <Navbar />
-      <div style={{ display: 'flex' }}>
+
+      <div className="classroom-layout">
         <Sidebar />
-        <main style={{ flex: 1, padding: '2rem', maxWidth: '1200px' }}>
+
+        <main className="classroom-main">
+          {error && (
+            <div className="classroom-feedback classroom-error">
+              <AlertCircle size={18} />
+              <span>{error}</span>
+              <button type="button" onClick={fetchClassroomData}>
+                Retry
+              </button>
+            </div>
+          )}
+
+          {liveClassError && (
+            <div className="classroom-feedback classroom-error" role="alert">
+              <AlertCircle size={18} />
+              <span>{liveClassError}</span>
+            </div>
+          )}
+
           {/* Header Banner */}
-          <div style={{
-            background: isTeacher ? 'linear-gradient(135deg, #059669 0%, #047857 100%)' : 'linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%)',
-            color: '#fff',
-            padding: '2rem',
-            borderRadius: '12px',
-            marginBottom: '1.5rem',
-            boxShadow: 'var(--shadow-md)'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
-                <span style={{ fontSize: '0.85rem', fontWeight: 'bold', background: 'rgba(255,255,255,0.2)', padding: '0.2rem 0.6rem', borderRadius: '4px' }}>
-                  Section {classDetails?.section}
+          <section
+            className={`classroom-banner ${
+              isTeacher ? 'classroom-banner-teacher' : 'classroom-banner-student'
+            }`}
+          >
+            <div className="classroom-banner-content">
+              <span className="classroom-section-badge">
+                Section {classDetails?.section}
+              </span>
+
+              <h1>{classDetails?.subjectTitle}</h1>
+
+              <p>
+                Subject Code: {classDetails?.subjectCode} | Class Code:{' '}
+                <strong>{classDetails?.classCode}</strong>
+              </p>
+            </div>
+
+            <div className="classroom-banner-right">
+              <button
+                type="button"
+                className="classroom-live-btn"
+                onClick={handleLiveClassClick}
+                disabled={checkingLiveClass}
+                aria-busy={checkingLiveClass}
+              >
+                <Video size={18} />
+                <span>
+                  {isTeacher
+                    ? 'Start Live Class'
+                    : checkingLiveClass
+                      ? 'Checking...'
+                      : 'Join Live Class'}
                 </span>
-                <h1 style={{ margin: '0.5rem 0 0', fontSize: '2rem' }}>{classDetails?.subjectTitle}</h1>
-                <p style={{ margin: '0.25rem 0 0', opacity: 0.9 }}>Subject Code: {classDetails?.subjectCode} | Class Code: <strong>{classDetails?.classCode}</strong></p>
+              </button>
+
+              <div className="classroom-enrolled-count">
+                Enrolled students: {classDetails?.enrolledStudentsCount ?? 0}
               </div>
 
-              <Link to={`/live-class/${classId}`} style={{
-                background: '#dc2626',
-                color: '#fff',
-                padding: '0.65rem 1.25rem',
-                borderRadius: '8px',
-                textDecoration: 'none',
-                fontWeight: 'bold',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                boxShadow: 'var(--shadow-sm)'
-              }}>
-                <Video size={18} />
-                <span>{isTeacher ? 'Start Live Class' : 'Join Live Class'}</span>
-              </Link>
+              {isTeacher && (
+                <button
+                  type="button"
+                  className="classroom-roster-btn"
+                  onClick={handleOpenRoster}
+                >
+                  <Users size={16} />
+                  <span>View Student Roster</span>
+                </button>
+              )}
             </div>
-          </div>
+          </section>
 
           {/* Classroom Tabs */}
-          <div style={{ display: 'flex', gap: '1rem', borderBottom: '2px solid var(--border-color)', marginBottom: '1.5rem' }}>
+          <div className="classroom-tabs">
             <button
+              type="button"
+              className={`classroom-tab ${
+                activeTab === 'stream' ? 'active' : ''
+              }`}
               onClick={() => setActiveTab('stream')}
-              style={{
-                background: 'none',
-                border: 'none',
-                padding: '0.75rem 1.25rem',
-                fontSize: '1rem',
-                fontWeight: 'bold',
-                cursor: 'pointer',
-                color: activeTab === 'stream' ? 'var(--primary-blue)' : 'var(--text-muted)',
-                borderBottom: activeTab === 'stream' ? '3px solid var(--primary-blue)' : '3px solid transparent'
-              }}
             >
               Stream Feed
             </button>
+
             <button
+              type="button"
+              className={`classroom-tab ${
+                activeTab === 'notes' ? 'active' : ''
+              }`}
               onClick={() => setActiveTab('notes')}
-              style={{
-                background: 'none',
-                border: 'none',
-                padding: '0.75rem 1.25rem',
-                fontSize: '1rem',
-                fontWeight: 'bold',
-                cursor: 'pointer',
-                color: activeTab === 'notes' ? 'var(--primary-blue)' : 'var(--text-muted)',
-                borderBottom: activeTab === 'notes' ? '3px solid var(--primary-blue)' : '3px solid transparent'
-              }}
             >
-              Class Notes & Documents
+              Class Notes &amp; Documents
             </button>
           </div>
 
-          {/* TAB 1: STREAM FEED */}
+          {/* Stream Feed */}
           {activeTab === 'stream' && (
-            <div>
-              {/* Create Post Box */}
-              <div style={{ background: '#fff', padding: '1.25rem', borderRadius: '12px', boxShadow: 'var(--shadow-sm)', marginBottom: '1.5rem', border: '1px solid var(--border-color)' }}>
+            <section className="classroom-stream">
+              <div className="classroom-create-post">
                 <form onSubmit={handleCreatePost}>
                   <textarea
                     rows={3}
                     value={newPostContent}
                     onChange={(e) => setNewPostContent(e.target.value)}
                     placeholder="Announce something to your class..."
-                    required
-                    style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)', resize: 'none', fontFamily: 'inherit' }}
                   />
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.75rem' }}>
-                    <button type="submit" style={{ background: 'var(--primary-blue)', color: '#fff', border: 'none', padding: '0.55rem 1.25rem', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+
+                  {postPreviews.length > 0 && (
+                    <div className="classroom-post-previews">
+                      {postPreviews.map((preview, index) => (
+                        <div key={index} className="classroom-post-preview-item">
+                          <img src={preview} alt={`Selected ${index + 1}`} />
+                          <button
+                            type="button"
+                            className="classroom-preview-remove"
+                            onClick={() => handleRemoveImage(index)}
+                            title="Remove image"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="classroom-post-actions">
+                    <label className="classroom-attach-btn" title="Attach image(s)">
+                      <Image size={18} />
+                      <span>Attach Images</span>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        multiple
+                        onChange={handleImageChange}
+                        style={{ display: 'none' }}
+                      />
+                    </label>
+
+                    <button
+                      type="submit"
+                      className="classroom-primary-btn"
+                      disabled={submittingPost || (!newPostContent.trim() && postImages.length === 0)}
+                    >
                       <Send size={16} />
-                      <span>Post</span>
+                      <span>{submittingPost ? 'Posting...' : 'Post'}</span>
                     </button>
                   </div>
                 </form>
               </div>
 
-              {/* Feed Stream */}
               {posts.length === 0 ? (
-                <div style={{ background: '#fff', padding: '2.5rem', borderRadius: '12px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                  <MessageSquare size={36} style={{ marginBottom: '0.5rem' }} />
+                <div className="classroom-empty-state">
+                  <MessageSquare size={36} />
                   <p>No announcements in this class stream yet.</p>
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <div className="classroom-post-list">
                   {posts.map((post) => (
-                    <div key={post._id} style={{ background: '#fff', borderRadius: '12px', border: '1px solid var(--border-color)', padding: '1.25rem', boxShadow: 'var(--shadow-sm)' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                          <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'var(--primary-blue)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
-                            {post.author?.name ? post.author.name.charAt(0).toUpperCase() : <User size={18} />}
+                    <article className="classroom-post-card" key={post._id}>
+                      <div className="classroom-post-header">
+                        <div className="classroom-author">
+                          <div className="classroom-avatar">
+                            {post.author?.name
+                              ? post.author.name.charAt(0).toUpperCase()
+                              : <User size={18} />}
                           </div>
+
                           <div>
-                            <span style={{ fontWeight: 'bold', display: 'block', fontSize: '0.95rem' }}>{post.author?.name}</span>
-                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{new Date(post.createdAt).toLocaleString()}</span>
+                            <span className="classroom-author-name">
+                              {post.author?.name}
+                            </span>
+                            <span className="classroom-post-date">
+                              {new Date(post.createdAt).toLocaleString()}
+                            </span>
                           </div>
                         </div>
 
-                        {(post.author?._id === user._id || isTeacher) && (
-                          <button onClick={() => handleDeletePost(post._id)} style={{ background: 'none', border: 'none', color: 'var(--danger-red)', cursor: 'pointer' }}>
+                        {(post.author?._id === user?._id || isTeacher) && (
+                          <button
+                            type="button"
+                            className="classroom-icon-delete"
+                            aria-label="Delete announcement"
+                            onClick={() => handleDeletePost(post._id)}
+                          >
                             <Trash2 size={18} />
                           </button>
                         )}
                       </div>
 
-                      <p style={{ margin: '0 0 1rem', fontSize: '0.95rem', color: 'var(--text-dark)', whitespace: 'pre-line' }}>{post.content}</p>
+                      {post.content && (
+                        <p className="classroom-post-content">{post.content}</p>
+                      )}
 
-                      {/* Comments Thread */}
-                      <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem', marginTop: '0.75rem' }}>
+                      {post.attachments && post.attachments.length > 0 && (
+                        <PostImageCarousel
+                          attachments={post.attachments}
+                          backendBase={backendBase}
+                          onExpandImage={(src) => setExpandedImage(src)}
+                        />
+                      )}
+
+                      {/* Comments */}
+                      <div className="classroom-comments">
                         {post.comments?.map((comment) => (
-                          <div key={comment._id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', background: '#f8fafc', padding: '0.5rem 0.75rem', borderRadius: '6px', marginBottom: '0.5rem' }}>
-                            <div>
-                              <span style={{ fontWeight: 'bold', fontSize: '0.85rem', color: 'var(--primary-blue)' }}>{comment.author?.name}: </span>
-                              <span style={{ fontSize: '0.85rem', color: 'var(--text-dark)' }}>{comment.content}</span>
+                          <div
+                            className="classroom-comment"
+                            key={comment._id}
+                          >
+                            <div className="classroom-comment-text">
+                              <span className="classroom-comment-author">
+                                {comment.author?.name}:{' '}
+                              </span>
+                              <span>{comment.content}</span>
                             </div>
-                            {(comment.author?._id === user._id || isTeacher) && (
-                              <button onClick={() => handleDeleteComment(post._id, comment._id)} style={{ background: 'none', border: 'none', color: 'var(--danger-red)', cursor: 'pointer', padding: 0 }}>
+
+                            {(comment.author?._id === user?._id || isTeacher) && (
+                              <button
+                                type="button"
+                                className="classroom-icon-delete"
+                                aria-label="Delete comment"
+                                onClick={() =>
+                                  handleDeleteComment(post._id, comment._id)
+                                }
+                              >
                                 <Trash2 size={14} />
                               </button>
                             )}
                           </div>
                         ))}
 
-                        {/* Add Comment Input */}
-                        <form onSubmit={(e) => handleAddComment(e, post._id)} style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+                        <form
+                          className="classroom-comment-form"
+                          onSubmit={(e) => handleAddComment(e, post._id)}
+                        >
                           <input
                             type="text"
                             placeholder="Write a comment..."
                             value={commentInputs[post._id] || ''}
-                            onChange={(e) => setCommentInputs({ ...commentInputs, [post._id]: e.target.value })}
-                            style={{ flex: 1, padding: '0.45rem 0.75rem', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '0.85rem' }}
+                            onChange={(e) =>
+                              setCommentInputs((previous) => ({
+                                ...previous,
+                                [post._id]: e.target.value
+                              }))
+                            }
                           />
-                          <button type="submit" style={{ background: 'var(--primary-blue)', color: '#fff', border: 'none', padding: '0.45rem 0.75rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}>
+
+                          <button type="submit" className="classroom-comment-btn">
                             Comment
                           </button>
                         </form>
                       </div>
-                    </div>
+                    </article>
                   ))}
                 </div>
               )}
-            </div>
+            </section>
           )}
 
-          {/* TAB 2: CLASS NOTES */}
+          {/* Class Notes */}
           {activeTab === 'notes' && (
-            <div>
+            <section className="classroom-notes">
               {isTeacher && (
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1.5rem' }}>
+                <div className="classroom-upload-actions">
                   <button
+                    type="button"
+                    className="classroom-upload-btn"
                     onClick={() => setShowNoteModal(true)}
-                    style={{ background: 'var(--academic-green)', color: '#fff', border: 'none', padding: '0.65rem 1.25rem', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
                   >
                     <Upload size={18} />
                     <span>Upload Material</span>
@@ -358,77 +612,130 @@ const ClassroomView = () => {
               )}
 
               {notes.length === 0 ? (
-                <div style={{ background: '#fff', padding: '2.5rem', borderRadius: '12px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                  <FileText size={36} style={{ marginBottom: '0.5rem' }} />
+                <div className="classroom-empty-state">
+                  <FileText size={36} />
                   <p>No notes or documents uploaded for this class yet.</p>
                 </div>
               ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.25rem' }}>
+                <div className="classroom-notes-grid">
                   {notes.map((note) => (
-                    <div key={note._id} style={{ background: '#fff', borderRadius: '12px', border: '1px solid var(--border-color)', padding: '1.25rem', boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                    <article className="classroom-note-card" key={note._id}>
                       <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                          <span style={{ background: '#dbeafe', color: 'var(--primary-blue)', fontSize: '0.75rem', fontWeight: 'bold', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>
+                        <div className="classroom-note-meta">
+                          <span className="classroom-file-type">
                             {note.fileType}
                           </span>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                          <span className="classroom-file-size">
                             {(note.fileSize / (1024 * 1024)).toFixed(2)} MB
                           </span>
                         </div>
-                        <h3 style={{ margin: '0.25rem 0', fontSize: '1.1rem', color: 'var(--text-dark)' }}>{note.title}</h3>
-                        <p style={{ margin: '0 0 1rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>{note.description || 'No description provided.'}</p>
+
+                        <h3>{note.title}</h3>
+                        <p>
+                          {note.description || 'No description provided.'}
+                        </p>
                       </div>
 
-                      <div style={{ display: 'flex', gap: '0.5rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
+                      <div className="classroom-note-actions">
                         <a
                           href={`http://localhost:5000${note.filePath}`}
                           target="_blank"
                           rel="noreferrer"
                           download
-                          style={{ flex: 1, background: 'var(--primary-blue)', color: '#fff', textAlign: 'center', padding: '0.5rem', borderRadius: '6px', textDecoration: 'none', fontSize: '0.85rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}
+                          className="classroom-download-btn"
                         >
                           <Download size={14} />
                           <span>Download</span>
                         </a>
 
                         {isTeacher && (
-                          <button onClick={() => handleDeleteNote(note._id)} style={{ background: '#fef2f2', border: '1px solid #fca5a5', color: 'var(--danger-red)', padding: '0.5rem', borderRadius: '6px', cursor: 'pointer' }}>
+                          <button
+                            type="button"
+                            className="classroom-icon-delete classroom-note-delete"
+                            aria-label="Delete course material"
+                            onClick={() => handleDeleteNote(note._id)}
+                          >
                             <Trash2 size={16} />
                           </button>
                         )}
                       </div>
-                    </div>
+                    </article>
                   ))}
                 </div>
               )}
 
               {/* Upload Note Modal */}
               {showNoteModal && (
-                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-                  <div style={{ background: '#fff', width: '100%', maxWidth: '450px', padding: '2rem', borderRadius: '12px', boxShadow: 'var(--shadow-lg)' }}>
-                    <h2 style={{ margin: '0 0 1.25rem', color: 'var(--text-dark)' }}>Upload Classroom Material</h2>
+                <div
+                  className="classroom-modal-overlay"
+                  onClick={() => !uploading && setShowNoteModal(false)}
+                >
+                  <div
+                    className="classroom-modal"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="classroom-modal-title"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <h2 id="classroom-modal-title">
+                      Upload Classroom Material
+                    </h2>
 
                     <form onSubmit={handleUploadNote}>
-                      <div style={{ marginBottom: '1rem' }}>
-                        <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: '500' }}>Document Title</label>
-                        <input type="text" value={noteTitle} onChange={(e) => setNoteTitle(e.target.value)} required placeholder="e.g. Unit 1 Lecture Notes" style={{ width: '100%', padding: '0.65rem', borderRadius: '6px', border: '1px solid var(--border-color)' }} />
+                      <div className="classroom-form-group">
+                        <label htmlFor="noteTitle">Document Title</label>
+                        <input
+                          id="noteTitle"
+                          type="text"
+                          value={noteTitle}
+                          onChange={(e) => setNoteTitle(e.target.value)}
+                          required
+                          placeholder="e.g. Unit 1 Lecture Notes"
+                        />
                       </div>
 
-                      <div style={{ marginBottom: '1rem' }}>
-                        <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: '500' }}>Description (Optional)</label>
-                        <textarea rows={2} value={noteDesc} onChange={(e) => setNoteDesc(e.target.value)} placeholder="Brief summary of document content..." style={{ width: '100%', padding: '0.65rem', borderRadius: '6px', border: '1px solid var(--border-color)', resize: 'none' }} />
+                      <div className="classroom-form-group">
+                        <label htmlFor="noteDescription">
+                          Description (Optional)
+                        </label>
+                        <textarea
+                          id="noteDescription"
+                          rows={2}
+                          value={noteDesc}
+                          onChange={(e) => setNoteDesc(e.target.value)}
+                          placeholder="Brief summary of document content..."
+                        />
                       </div>
 
-                      <div style={{ marginBottom: '1.5rem' }}>
-                        <label style={{ display: 'block', marginBottom: '0.3rem', fontWeight: '500' }}>Select File (PDF, PPT, DOC, Images)</label>
-                        <input type="file" onChange={(e) => setSelectedFile(e.target.files[0])} required style={{ width: '100%', padding: '0.5rem' }} />
+                      <div className="classroom-form-group classroom-file-group">
+                        <label htmlFor="noteFile">
+                          Select File (PDF, PPT, DOC, Images)
+                        </label>
+                        <input
+                          id="noteFile"
+                          type="file"
+                          onChange={(e) =>
+                            setSelectedFile(e.target.files?.[0] || null)
+                          }
+                          required
+                        />
                       </div>
 
-                      <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-                        <button type="button" onClick={() => setShowNoteModal(false)} style={{ background: '#e2e8f0', color: 'var(--text-dark)', border: 'none', padding: '0.65rem 1.25rem', borderRadius: '6px', cursor: 'pointer' }}>
+                      <div className="classroom-modal-actions">
+                        <button
+                          type="button"
+                          className="classroom-cancel-btn"
+                          disabled={uploading}
+                          onClick={() => setShowNoteModal(false)}
+                        >
                           Cancel
                         </button>
-                        <button type="submit" disabled={uploading} style={{ background: 'var(--academic-green)', color: '#fff', border: 'none', padding: '0.65rem 1.25rem', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>
+
+                        <button
+                          type="submit"
+                          className="classroom-upload-btn"
+                          disabled={uploading}
+                        >
                           {uploading ? 'Uploading...' : 'Upload'}
                         </button>
                       </div>
@@ -436,6 +743,104 @@ const ClassroomView = () => {
                   </div>
                 </div>
               )}
+            </section>
+          )}
+
+          {/* Teacher-only Student Roster Modal */}
+          {showRosterModal && (
+            <div
+              className="classroom-modal-overlay"
+              onClick={() => setShowRosterModal(false)}
+            >
+              <div
+                className="classroom-modal classroom-roster-modal"
+                role="dialog"
+                aria-modal="true"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="classroom-modal-header">
+                  <h2>Enrolled Students Roster</h2>
+                  <button
+                    type="button"
+                    className="classroom-modal-close"
+                    onClick={() => setShowRosterModal(false)}
+                    aria-label="Close roster"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <p className="classroom-roster-subtitle">
+                  {classDetails?.subjectTitle} ({classDetails?.classCode}) &bull;{' '}
+                  {roster.length} student{roster.length === 1 ? '' : 's'} enrolled
+                </p>
+
+                {rosterLoading ? (
+                  <div className="classroom-modal-loading">Loading student roster...</div>
+                ) : rosterError ? (
+                  <div className="classroom-feedback classroom-error">
+                    <AlertCircle size={18} />
+                    <span>{rosterError}</span>
+                    <button type="button" onClick={handleOpenRoster}>Retry</button>
+                  </div>
+                ) : roster.length === 0 ? (
+                  <div className="classroom-empty-state">
+                    <Users size={36} />
+                    <p>No students enrolled in this classroom yet.</p>
+                  </div>
+                ) : (
+                  <div className="classroom-roster-table-wrapper">
+                    <table className="classroom-roster-table">
+                      <thead>
+                        <tr>
+                          <th>#</th>
+                          <th>Student Name</th>
+                          <th>Roll Number</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {roster.map((student, idx) => (
+                          <tr key={student._id}>
+                            <td className="roster-index">{idx + 1}</td>
+                            <td className="roster-name">{student.name}</td>
+                            <td className="roster-roll">{student.rollNumber || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                <div className="classroom-modal-actions" style={{ marginTop: '1.25rem' }}>
+                  <button
+                    type="button"
+                    className="classroom-cancel-btn"
+                    onClick={() => setShowRosterModal(false)}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Post Image Fullscreen Lightbox */}
+          {expandedImage && (
+            <div
+              className="classroom-image-lightbox"
+              onClick={() => setExpandedImage(null)}
+            >
+              <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
+                <img src={expandedImage} alt="Expanded Attachment" />
+                <button
+                  type="button"
+                  className="lightbox-close-btn"
+                  onClick={() => setExpandedImage(null)}
+                  aria-label="Close image"
+                >
+                  <X size={24} />
+                </button>
+              </div>
             </div>
           )}
         </main>

@@ -7,6 +7,7 @@ const academicRecordSchema = new mongoose.Schema({
   assignmentMarks: { type: Number, default: 0 },
   internalMarks: { type: Number, default: 0 },
   examMarks: { type: Number, default: 0 },
+  mscMarks: { type: Number, default: 0 },
   incentiveMarks: { type: Number, default: 0 },
   overallMarks: { type: Number, default: 0 }
 }, { timestamps: true });

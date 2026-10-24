@@ -1,9 +1,11 @@
-import React, { useEffect, useState, useContext } from 'react';
+
+import React, { useEffect, useState, useContext, useRef } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import API from '../../services/api';
 import Navbar from '../../components/layout/Navbar';
 import Sidebar from '../../components/layout/Sidebar';
-import { CalendarCheck, Save, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
+import { Save, CheckCircle2 } from 'lucide-react';
+import './style2.css';
 
 const AttendancePage = () => {
   const { user } = useContext(AuthContext);
@@ -11,15 +13,34 @@ const AttendancePage = () => {
 
   const [classes, setClasses] = useState([]);
   const [selectedClassId, setSelectedClassId] = useState('');
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(
+    new Date().toISOString().split('T')[0]
+  );
 
-  // Attendance state for teacher batch entry
+  // Teacher attendance entry
   const [studentsAttendance, setStudentsAttendance] = useState([]);
-  // Student summary
+
+  // Student attendance summary
   const [studentSummary, setStudentSummary] = useState(null);
+  const [totalSessions, setTotalSessions] = useState(0);
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
+
+  const markAllCheckboxRef = useRef(null);
+
+  const isAllPresent =
+    studentsAttendance.length > 0 &&
+    studentsAttendance.every((sa) => sa.status === 'PRESENT');
+  const isSomePresent =
+    studentsAttendance.some((sa) => sa.status === 'PRESENT') && !isAllPresent;
+
+  useEffect(() => {
+    if (markAllCheckboxRef.current) {
+      markAllCheckboxRef.current.indeterminate = isSomePresent;
+    }
+  }, [isSomePresent]);
 
   useEffect(() => {
     fetchClasses();
@@ -35,7 +56,9 @@ const AttendancePage = () => {
     try {
       const res = await API.get('/classes');
       const fetchedClasses = res.data.classes || [];
+
       setClasses(fetchedClasses);
+
       if (fetchedClasses.length > 0) {
         setSelectedClassId(fetchedClasses[0]._id);
       }
@@ -49,10 +72,17 @@ const AttendancePage = () => {
   const fetchAttendanceData = async () => {
     try {
       if (isTeacher) {
-        const res = await API.get(`/attendance/class/${selectedClassId}?date=${selectedDate}`);
+        const res = await API.get(
+          `/attendance/class/${selectedClassId}?date=${selectedDate}`
+        );
+
         setStudentsAttendance(res.data.attendance || []);
+        setTotalSessions(res.data.totalSessions ?? 0);
       } else {
-        const res = await API.get(`/attendance/class/${selectedClassId}`);
+        const res = await API.get(
+          `/attendance/class/${selectedClassId}`
+        );
+
         setStudentSummary(res.data.summary);
       }
     } catch (err) {
@@ -61,26 +91,31 @@ const AttendancePage = () => {
   };
 
   const handleStatusChange = (studentId, status) => {
-    setStudentsAttendance(
-      studentsAttendance.map((sa) => (sa.student._id === studentId ? { ...sa, status } : sa))
+    setStudentsAttendance((previousAttendance) =>
+      previousAttendance.map((sa) =>
+        sa.student._id === studentId ? { ...sa, status } : sa
+      )
     );
   };
 
   const handleSaveAttendance = async () => {
     setSaving(true);
     setMsg('');
+
     try {
       const payload = studentsAttendance.map((sa) => ({
         studentId: sa.student._id,
-        status: sa.status
+        status: sa.status,
       }));
 
       await API.post('/attendance', {
         classId: selectedClassId,
         date: selectedDate,
-        records: payload
+        records: payload,
       });
+
       setMsg('Attendance records saved successfully.');
+      await fetchAttendanceData();
     } catch (err) {
       alert('Failed to save attendance.');
     } finally {
@@ -88,100 +123,247 @@ const AttendancePage = () => {
     }
   };
 
+  const handleToggleMarkAllPresent = () => {
+    if (studentsAttendance.length === 0) return;
+
+    if (isAllPresent) {
+      setStudentsAttendance((prev) =>
+        prev.map((sa) => ({ ...sa, status: 'ABSENT' }))
+      );
+    } else {
+      setStudentsAttendance((prev) =>
+        prev.map((sa) => ({ ...sa, status: 'PRESENT' }))
+      );
+    }
+  };
+
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-light)' }}>
+    <div className="attendance-page">
       <Navbar />
-      <div style={{ display: 'flex' }}>
+
+      <div className="attendance-layout">
         <Sidebar />
-        <main style={{ flex: 1, padding: '2rem', maxWidth: '1000px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+
+        <main className="attendance-main">
+          <div className="attendance-page-header">
             <div>
-              <h1 style={{ margin: 0, color: 'var(--text-dark)', fontSize: '1.75rem' }}>Attendance Management</h1>
-              <p style={{ margin: '0.25rem 0 0', color: 'var(--text-muted)' }}>Track classroom presence and compliance rates</p>
+              <h1 className="attendance-page-title">
+                Attendance Management
+              </h1>
+
+              <p className="attendance-page-subtitle">
+                Track classroom presence and compliance rates
+              </p>
             </div>
           </div>
 
-          {/* Controls Bar */}
-          <div style={{ background: '#fff', padding: '1rem 1.25rem', borderRadius: '8px', border: '1px solid var(--border-color)', marginBottom: '1.5rem', display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
-            <div>
-              <label style={{ fontWeight: 'bold', marginRight: '0.5rem' }}>Classroom:</label>
-              <select value={selectedClassId} onChange={(e) => setSelectedClassId(e.target.value)} style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+          {/* Controls */}
+          <div className="attendance-controls">
+            <div className="attendance-control-group">
+              <label
+                className="attendance-label"
+                htmlFor="attendance-class"
+              >
+                Classroom:
+              </label>
+
+              <select
+                id="attendance-class"
+                className="attendance-select"
+                value={selectedClassId}
+                onChange={(e) => setSelectedClassId(e.target.value)}
+              >
                 {classes.map((c) => (
-                  <option key={c._id} value={c._id}>{c.subjectTitle} ({c.classCode})</option>
+                  <option key={c._id} value={c._id}>
+                    {c.subjectTitle} ({c.classCode})
+                  </option>
                 ))}
               </select>
             </div>
 
             {isTeacher && (
-              <div>
-                <label style={{ fontWeight: 'bold', marginRight: '0.5rem' }}>Session Date:</label>
-                <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} style={{ padding: '0.45rem', borderRadius: '6px', border: '1px solid var(--border-color)' }} />
+              <div className="attendance-control-group">
+                <label
+                  className="attendance-label"
+                  htmlFor="attendance-date"
+                >
+                  Session Date:
+                </label>
+
+                <input
+                  id="attendance-date"
+                  className="attendance-date-input"
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                />
               </div>
             )}
           </div>
 
           {msg && (
-            <div style={{ background: '#f0fdf4', border: '1px solid #86efac', padding: '0.75rem', borderRadius: '6px', color: 'var(--academic-green)', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <div className="attendance-success-message">
               <CheckCircle2 size={18} />
               <span>{msg}</span>
             </div>
           )}
 
-          {/* Teacher Attendance Entry List */}
+          {/* Teacher View */}
           {isTeacher ? (
-            <div style={{ background: '#fff', padding: '1.5rem', borderRadius: '12px', boxShadow: 'var(--shadow-sm)', border: '1px solid var(--border-color)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
-                <h3 style={{ margin: 0 }}>Enrolled Student List</h3>
-                <button onClick={handleSaveAttendance} disabled={saving} style={{ background: 'var(--academic-green)', color: '#fff', border: 'none', padding: '0.6rem 1.25rem', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <div className="attendance-card attendance-teacher-card">
+              <div className="attendance-card-header">
+                <div className="attendance-card-header-left">
+                  <h3 className="attendance-card-title">
+                    Enrolled Student List
+                  </h3>
+
+                  <span className="attendance-total-sessions-badge">
+                    Total Sessions: <strong>{totalSessions}</strong>
+                  </span>
+
+                  {studentsAttendance.length > 0 && (
+                    <label className="attendance-mark-all-label" title="Mark all enrolled students Present">
+                      <input
+                        type="checkbox"
+                        ref={markAllCheckboxRef}
+                        checked={isAllPresent}
+                        onChange={handleToggleMarkAllPresent}
+                        disabled={saving}
+                      />
+                      <span>Mark all enrolled students Present</span>
+                    </label>
+                  )}
+                </div>
+
+                <button
+                  className="attendance-save-btn"
+                  onClick={handleSaveAttendance}
+                  disabled={saving}
+                >
                   <Save size={16} />
-                  <span>{saving ? 'Saving...' : 'Save Attendance'}</span>
+                  <span>
+                    {saving ? 'Saving...' : 'Save Attendance'}
+                  </span>
                 </button>
               </div>
 
               {studentsAttendance.length === 0 ? (
-                <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>No enrolled students in this classroom yet.</div>
+                <div className="attendance-empty-state">
+                  No enrolled students in this classroom yet.
+                </div>
               ) : (
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ background: '#f8fafc', textAlign: 'left', borderBottom: '1px solid var(--border-color)' }}>
-                      <th style={{ padding: '0.75rem' }}>Student Name</th>
-                      <th style={{ padding: '0.75rem' }}>Email</th>
-                      <th style={{ padding: '0.75rem', textAlign: 'center' }}>Presence Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {studentsAttendance.map((sa) => (
-                      <tr key={sa.student._id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                        <td style={{ padding: '0.75rem', fontWeight: 'bold' }}>{sa.student.name}</td>
-                        <td style={{ padding: '0.75rem', color: 'var(--text-muted)' }}>{sa.student.email}</td>
-                        <td style={{ padding: '0.75rem', textAlign: 'center' }}>
-                          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
-                            <button onClick={() => handleStatusChange(sa.student._id, 'PRESENT')} style={{ background: sa.status === 'PRESENT' ? 'var(--academic-green)' : '#e2e8f0', color: sa.status === 'PRESENT' ? '#fff' : 'var(--text-dark)', border: 'none', padding: '0.35rem 0.75rem', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.8rem' }}>Present</button>
-                            <button onClick={() => handleStatusChange(sa.student._id, 'ABSENT')} style={{ background: sa.status === 'ABSENT' ? 'var(--danger-red)' : '#e2e8f0', color: sa.status === 'ABSENT' ? '#fff' : 'var(--text-dark)', border: 'none', padding: '0.35rem 0.75rem', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.8rem' }}>Absent</button>
-                          </div>
-                        </td>
+                <div className="attendance-table-wrapper">
+                  <table className="attendance-table">
+                    <thead>
+                      <tr>
+                        <th>Student Name</th>
+                        <th>Roll Number</th>
+                        <th className="attendance-percentage-header">
+                          Attendance %
+                        </th>
+                        <th className="attendance-status-cell">
+                          Presence Status
+                        </th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+
+                    <tbody>
+                      {studentsAttendance.map((sa) => (
+                        <tr key={sa.student._id}>
+                          <td className="attendance-student-name">
+                            {sa.student.name}
+                          </td>
+
+                          <td className="attendance-student-roll">
+                            {sa.student.rollNumber || '—'}
+                          </td>
+
+                          <td className="attendance-percentage-cell">
+                            <strong>
+                              {typeof sa.attendancePercentage === 'number'
+                                ? `${sa.attendancePercentage.toFixed(1)}%`
+                                : '0%'}
+                            </strong>
+                          </td>
+
+                          <td className="attendance-status-cell">
+                            <div className="attendance-status-actions">
+                              <button
+                                className={`attendance-status-btn ${
+                                  sa.status === 'PRESENT'
+                                    ? 'attendance-status-btn--present-active'
+                                    : 'attendance-status-btn--inactive'
+                                }`}
+                                onClick={() =>
+                                  handleStatusChange(
+                                    sa.student._id,
+                                    'PRESENT'
+                                  )
+                                }
+                              >
+                                Present
+                              </button>
+
+                              <button
+                                className={`attendance-status-btn ${
+                                  sa.status === 'ABSENT'
+                                    ? 'attendance-status-btn--absent-active'
+                                    : 'attendance-status-btn--inactive'
+                                }`}
+                                onClick={() =>
+                                  handleStatusChange(
+                                    sa.student._id,
+                                    'ABSENT'
+                                  )
+                                }
+                              >
+                                Absent
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           ) : (
             /* Student View */
-            <div style={{ background: '#fff', padding: '2rem', borderRadius: '12px', boxShadow: 'var(--shadow-sm)' }}>
-              <h2 style={{ margin: '0 0 1.5rem' }}>Your Attendance Summary</h2>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
-                <div style={{ background: '#dbeafe', padding: '1.25rem', borderRadius: '8px', textAlign: 'center' }}>
-                  <span style={{ fontSize: '0.85rem', color: 'var(--primary-blue)', display: 'block' }}>Total Sessions</span>
-                  <span style={{ fontSize: '1.8rem', fontWeight: 'bold', color: 'var(--primary-blue)' }}>{studentSummary?.totalSessions || 0}</span>
+            <div className="attendance-card attendance-student-card">
+              <h2 className="attendance-summary-title">
+                Your Attendance Summary
+              </h2>
+
+              <div className="attendance-summary-grid">
+                <div className="attendance-stat-card attendance-stat-card--total">
+                  <span className="attendance-stat-label">
+                    Total Sessions
+                  </span>
+
+                  <span className="attendance-stat-value">
+                    {studentSummary?.totalSessions || 0}
+                  </span>
                 </div>
-                <div style={{ background: '#d1fae5', padding: '1.25rem', borderRadius: '8px', textAlign: 'center' }}>
-                  <span style={{ fontSize: '0.85rem', color: 'var(--academic-green)', display: 'block' }}>Sessions Attended</span>
-                  <span style={{ fontSize: '1.8rem', fontWeight: 'bold', color: 'var(--academic-green)' }}>{studentSummary?.presentCount || 0}</span>
+
+                <div className="attendance-stat-card attendance-stat-card--present">
+                  <span className="attendance-stat-label">
+                    Sessions Attended
+                  </span>
+
+                  <span className="attendance-stat-value">
+                    {studentSummary?.presentCount || 0}
+                  </span>
                 </div>
-                <div style={{ background: '#fee2e2', padding: '1.25rem', borderRadius: '8px', textAlign: 'center' }}>
-                  <span style={{ fontSize: '0.85rem', color: 'var(--danger-red)', display: 'block' }}>Attendance Percentage</span>
-                  <span style={{ fontSize: '1.8rem', fontWeight: 'bold', color: 'var(--danger-red)' }}>{studentSummary?.percentage || 100}%</span>
+
+                <div className="attendance-stat-card attendance-stat-card--percentage">
+                  <span className="attendance-stat-label">
+                    Attendance Percentage
+                  </span>
+
+                  <span className="attendance-stat-value">
+                    {studentSummary?.percentage ?? 100}%
+                  </span>
                 </div>
               </div>
             </div>

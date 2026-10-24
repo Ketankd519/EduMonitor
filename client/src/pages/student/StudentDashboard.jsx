@@ -1,13 +1,27 @@
 import React, { useEffect, useState, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
+import { useLiveTicker } from '../../context/LiveTickerContext';
 import API from '../../services/api';
 import Navbar from '../../components/layout/Navbar';
 import Sidebar from '../../components/layout/Sidebar';
-import { BookOpen, FileText, CheckCircle2, TrendingUp, Plus, AlertCircle, Bell } from 'lucide-react';
+import {
+  BookOpen,
+  FileText,
+  CheckCircle2,
+  TrendingUp,
+  Plus,
+  AlertCircle,
+  Bell,
+  Radio,
+  FileCheck,
+  ArrowRight
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
+import './style.css';
 
 const StudentDashboard = () => {
   const { user } = useContext(AuthContext);
+  const { liveItems } = useLiveTicker();
   const [summary, setSummary] = useState(null);
   const [recentPosts, setRecentPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -29,104 +43,153 @@ const StudentDashboard = () => {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-light)' }}>
+    <div className="student-dashboard">
       <Navbar />
-      <div style={{ display: 'flex' }}>
+
+      <div className="student-dashboard-layout">
         <Sidebar />
-        <main style={{ flex: 1, padding: '2rem', maxWidth: '1200px' }}>
+
+        <main className="student-dashboard-main">
           {/* Welcome Banner */}
-          <div style={{
-            background: 'linear-gradient(135deg, var(--primary-blue) 0%, #1e40af 100%)',
-            color: '#fff',
-            padding: '2rem',
-            borderRadius: '12px',
-            marginBottom: '2rem',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            boxShadow: 'var(--shadow-md)'
-          }}>
-            <div>
-              <h1 style={{ margin: 0, fontSize: '1.8rem' }}>Welcome back, {user?.name}!</h1>
-              <p style={{ margin: '0.5rem 0 0', opacity: 0.9, fontSize: '0.95rem' }}>
-                Track your active virtual classrooms, upcoming tests, and academic metrics in real time.
+          <section className="student-welcome-banner">
+            <div className="student-welcome-content">
+              <h1>Welcome back, {user?.name}!</h1>
+              <p>
+                Track your active virtual classrooms, upcoming tests, and
+                academic metrics in real time.
               </p>
             </div>
-            <Link to="/classes" style={{
-              background: '#ffffff',
-              color: 'var(--primary-blue)',
-              padding: '0.65rem 1.25rem',
-              borderRadius: '8px',
-              textDecoration: 'none',
-              fontWeight: 'bold',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              boxShadow: 'var(--shadow-sm)'
-            }}>
+
+            <Link to="/classes" className="student-join-class-btn">
               <Plus size={18} />
               <span>Join Class</span>
             </Link>
-          </div>
+          </section>
+
+          {/* Live Activities Banner: Prominently displayed when any class or assignment is live */}
+          {/* {liveItems && liveItems.length > 0 && (
+            <section className="student-live-alert-section" aria-label="Live activities">
+              <div className="student-live-alert-header">
+                <span className="live-dot-pulse" aria-hidden="true" />
+                <h2>Live Now</h2>
+              </div>
+              <div className="student-live-alert-grid">
+                {liveItems.map((item) => {
+                  const isLiveClass = item.type === 'live-class';
+                  const targetPath = isLiveClass ? `/classroom/${item.classId}` : '/assignments';
+                  const linkState = isLiveClass
+                    ? null
+                    : { classId: item.classId, assignmentId: item.assignmentId };
+
+                  return (
+                    <article
+                      key={item.id}
+                      className={`student-live-alert-card student-live-alert-card--${item.type}`}
+                    >
+                      <div className="student-live-alert-icon">
+                        {isLiveClass ? <Radio size={20} color="#dc2626" /> : <FileCheck size={20} color="#dc2626" />}
+                      </div>
+                      <div className="student-live-alert-body">
+                        <span className="student-live-alert-tag">
+                          {isLiveClass ? 'Live Class Active' : 'MCQ Exam Open'}
+                        </span>
+                        <h3 className="student-live-alert-title">{item.text}</h3>
+                        <p className="student-live-alert-desc">
+                          {isLiveClass
+                            ? 'A live lecture session is underway. Click below to view classroom details and join.'
+                            : 'An examination is active and accepting submissions. Click below to view in assignments.'}
+                        </p>
+                      </div>
+                      <Link
+                        to={targetPath}
+                        state={linkState}
+                        className="student-live-alert-btn"
+                      >
+                        <span>{isLiveClass ? 'View Class' : 'View Test'}</span>
+                        <ArrowRight size={16} />
+                      </Link>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          )} */}
 
           {loading ? (
-            <div>Loading statistics...</div>
+            <div className="student-loading">Loading statistics...</div>
           ) : (
             <>
               {/* KPI Stat Cards */}
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                gap: '1.25rem',
-                marginBottom: '2.5rem'
-              }}>
-                <StatCard title="Joined Classes" value={summary?.totalClasses || 0} icon={<BookOpen color="#1e3a8a" />} color="#dbeafe" />
-                <StatCard title="Upcoming Assignments" value={summary?.upcomingAssignments || 0} icon={<FileText color="#d97706" />} color="#fef3c7" />
-                <StatCard title="Attendance Rate" value={`${summary?.attendancePercentage || 100}%`} icon={<CheckCircle2 color="#059669" />} color="#d1fae5" />
-                <StatCard title="Avg Score" value={`${summary?.avgAssignmentScore || 0}%`} icon={<TrendingUp color="#1e3a8a" />} color="#e0e7ff" />
-              </div>
+              <section className="student-stats-grid">
+                <StatCard
+                  title="Joined Classes"
+                  value={summary?.totalClasses || 0}
+                  icon={<BookOpen color="#1e3a8a" />}
+                  color="#dbeafe"
+                />
+
+                <StatCard
+                  title="Upcoming Assignments"
+                  value={summary?.upcomingAssignments || 0}
+                  icon={<FileText color="#d97706" />}
+                  color="#fef3c7"
+                />
+
+                <StatCard
+                  title="Attendance Rate"
+                  value={`${summary?.attendancePercentage || 100}%`}
+                  icon={<CheckCircle2 color="#059669" />}
+                  color="#d1fae5"
+                />
+
+                <StatCard
+                  title="Avg Score"
+                  value={`${summary?.avgAssignmentScore || 0}%`}
+                  icon={<TrendingUp color="#1e3a8a" />}
+                  color="#e0e7ff"
+                />
+              </section>
 
               {/* Announcements Section */}
-              <div style={{ background: '#ffffff', padding: '1.5rem', borderRadius: '12px', boxShadow: 'var(--shadow-sm)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem' }}>
+              <section className="student-announcements">
+                <div className="student-announcements-header">
                   <Bell size={20} color="var(--primary-blue)" />
-                  <h2 style={{ margin: 0, fontSize: '1.25rem', color: 'var(--text-dark)' }}>Recent Announcements</h2>
+                  <h2>Recent Announcements</h2>
                 </div>
 
                 {recentPosts.length === 0 ? (
-                  <div style={{
-                    padding: '2.5rem',
-                    textAlign: 'center',
-                    color: 'var(--text-muted)',
-                    background: 'var(--bg-light)',
-                    borderRadius: '8px'
-                  }}>
-                    <AlertCircle size={32} style={{ marginBottom: '0.5rem' }} />
-                    <p style={{ margin: 0 }}>No announcements posted yet in your joined classes.</p>
+                  <div className="student-empty-announcements">
+                    <AlertCircle size={32} />
+                    <p>
+                      No announcements posted yet in your joined classes.
+                    </p>
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div className="student-announcements-list">
                     {recentPosts.map((post) => (
-                      <div key={post._id} style={{
-                        padding: '1rem',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: '8px',
-                        background: '#fafafa'
-                      }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
-                          <span style={{ fontWeight: 'bold', fontSize: '0.9rem', color: 'var(--primary-blue)' }}>
-                            {post.class?.subjectTitle} ({post.class?.subjectCode})
+                      <article
+                        key={post._id}
+                        className="student-announcement-card"
+                      >
+                        <div className="student-announcement-meta">
+                          <span className="student-announcement-subject">
+                            {post.class?.subjectTitle} (
+                            {post.class?.subjectCode})
                           </span>
-                          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+
+                          <span className="student-announcement-date">
                             {new Date(post.createdAt).toLocaleDateString()}
                           </span>
                         </div>
-                        <p style={{ margin: 0, color: 'var(--text-dark)', fontSize: '0.95rem' }}>{post.content}</p>
-                      </div>
+
+                        <p className="student-announcement-content">
+                          {post.content}
+                        </p>
+                      </article>
                     ))}
                   </div>
                 )}
-              </div>
+              </section>
             </>
           )}
         </main>
@@ -136,24 +199,19 @@ const StudentDashboard = () => {
 };
 
 const StatCard = ({ title, value, icon, color }) => (
-  <div style={{
-    background: '#ffffff',
-    padding: '1.25rem',
-    borderRadius: '12px',
-    border: '1px solid var(--border-color)',
-    boxShadow: 'var(--shadow-sm)',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '1rem'
-  }}>
-    <div style={{ background: color, padding: '0.85rem', borderRadius: '10px', display: 'flex' }}>
+  <article className="student-stat-card">
+    <div
+      className="student-stat-icon"
+      style={{ backgroundColor: color }}
+    >
       {icon}
     </div>
-    <div>
-      <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block' }}>{title}</span>
-      <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--text-dark)' }}>{value}</span>
+
+    <div className="student-stat-info">
+      <span className="student-stat-title">{title}</span>
+      <span className="student-stat-value">{value}</span>
     </div>
-  </div>
+  </article>
 );
 
 export default StudentDashboard;

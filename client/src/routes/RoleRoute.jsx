@@ -9,7 +9,10 @@ const RoleRoute = ({ allowedRoles }) => {
     return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>Verifying Permissions...</div>;
   }
 
-  return user && allowedRoles.includes(user.role) ? (
+  const userRole = user?.role ? user.role.toUpperCase() : '';
+  const normalizedAllowedRoles = (allowedRoles || []).map((r) => r.toUpperCase());
+
+  return user && normalizedAllowedRoles.includes(userRole) ? (
     <Outlet />
   ) : (
     <Navigate to="/" replace />

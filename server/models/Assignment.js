@@ -8,7 +8,10 @@ const assignmentSchema = new mongoose.Schema({
   startDate: { type: Date, required: true },
   endDate: { type: Date, required: true },
   totalMarks: { type: Number, required: true },
-  allowRetake: { type: Boolean, default: false }
+  marksPerQuestion: { type: Number, default: 1 },
+  negativeMarks: { type: Number, default: 0 },
+  allowRetake: { type: Boolean, default: false },
+  answersReleased: { type: Boolean, default: false }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Assignment', assignmentSchema);

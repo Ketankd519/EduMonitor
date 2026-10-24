@@ -1,6 +1,9 @@
 const Post = require('../models/Post');
 const Comment = require('../models/Comment');
 const Class = require('../models/Class');
+const ClassMember = require('../models/ClassMember');
+const fs = require('fs');
+const path = require('path');
 
 // @desc    Get all posts for a class with comments
 // @route   GET /api/posts/class/:classId
@@ -8,6 +11,18 @@ const Class = require('../models/Class');
 exports.getClassPosts = async (req, res, next) => {
   try {
     const { classId } = req.params;
+
+    const classDoc = await Class.findById(classId);
+    if (!classDoc) {
+      return res.status(404).json({ success: false, message: 'Classroom not found.' });
+    }
+
+    const isTeacher = classDoc.teacher.toString() === req.user._id.toString();
+    const isEnrolled = await ClassMember.exists({ class: classId, student: req.user._id });
+
+    if (!isTeacher && !isEnrolled) {
+      return res.status(403).json({ success: false, message: 'Not authorized to view posts in this classroom.' });
+    }
 
     const posts = await Post.find({ class: classId })
       .populate('author', 'name role avatar')
@@ -36,21 +51,61 @@ exports.getClassPosts = async (req, res, next) => {
   }
 };
 
-// @desc    Create a new announcement post (Teacher or Student)
+// @desc    Create a new announcement post with optional image attachments (Teacher or Student)
 // @route   POST /api/posts
 // @access  Private
 exports.createPost = async (req, res, next) => {
   try {
     const { classId, content } = req.body;
+    const hasFiles = req.files && req.files.length > 0;
 
-    if (!classId || !content) {
-      return res.status(400).json({ success: false, message: 'Classroom ID and Post Content are required.' });
+    if (!classId || (!content?.trim() && !hasFiles)) {
+      if (hasFiles) {
+        req.files.forEach((f) => {
+          if (fs.existsSync(f.path)) {
+            try { fs.unlinkSync(f.path); } catch (e) {}
+          }
+        });
+      }
+      return res.status(400).json({
+        success: false,
+        message: 'Classroom ID and Post Content or Images are required.'
+      });
     }
+
+    const classDoc = await Class.findById(classId);
+    if (!classDoc) {
+      if (hasFiles) {
+        req.files.forEach((f) => {
+          if (fs.existsSync(f.path)) {
+            try { fs.unlinkSync(f.path); } catch (e) {}
+          }
+        });
+      }
+      return res.status(404).json({ success: false, message: 'Classroom not found.' });
+    }
+
+    const isTeacher = classDoc.teacher.toString() === req.user._id.toString();
+    const isEnrolled = await ClassMember.exists({ class: classId, student: req.user._id });
+
+    if (!isTeacher && !isEnrolled) {
+      if (hasFiles) {
+        req.files.forEach((f) => {
+          if (fs.existsSync(f.path)) {
+            try { fs.unlinkSync(f.path); } catch (e) {}
+          }
+        });
+      }
+      return res.status(403).json({ success: false, message: 'Not authorized to post in this classroom.' });
+    }
+
+    const attachments = hasFiles ? req.files.map((f) => `/uploads/${f.filename}`) : [];
 
     const newPost = await Post.create({
       class: classId,
       author: req.user._id,
-      content
+      content: content?.trim() || '',
+      attachments
     });
 
     const populatedPost = await Post.findById(newPost._id).populate('author', 'name role avatar');
@@ -61,6 +116,13 @@ exports.createPost = async (req, res, next) => {
       post: { ...populatedPost.toObject(), comments: [] }
     });
   } catch (error) {
+    if (req.files && req.files.length > 0) {
+      req.files.forEach((f) => {
+        if (fs.existsSync(f.path)) {
+          try { fs.unlinkSync(f.path); } catch (e) {}
+        }
+      });
+    }
     next(error);
   }
 };
@@ -83,6 +145,16 @@ exports.deletePost = async (req, res, next) => {
 
     if (!isAuthor && !isTeacher) {
       return res.status(403).json({ success: false, message: 'Not authorized to delete this post.' });
+    }
+
+    // Unlink attached image files
+    if (post.attachments && post.attachments.length > 0) {
+      post.attachments.forEach((att) => {
+        const filePath = path.join(__dirname, '..', att);
+        if (fs.existsSync(filePath)) {
+          try { fs.unlinkSync(filePath); } catch (e) {}
+        }
+      });
     }
 
     await Post.findByIdAndDelete(postId);

@@ -6,6 +6,7 @@ const Assignment = require('../models/Assignment');
 const Submission = require('../models/Submission');
 const LiveClass = require('../models/LiveClass');
 const { getStudentAttendanceSummary } = require('../services/attendanceService');
+const User = require('../models/User');
 
 /**
  * GET /api/dashboard/student
@@ -149,4 +150,23 @@ async function getTeacherDashboard(req, res, next) {
   }
 }
 
-module.exports = { getStudentDashboard, getTeacherDashboard };
+// Public statistics for the homepage
+async function getPublicStats(req, res, next) {
+  try {
+    const [students, teachers, users] = await Promise.all([
+      User.countDocuments({ role: 'STUDENT' }),
+      User.countDocuments({ role: 'TEACHER' }),
+      User.countDocuments({})
+    ]);
+
+    return success(res, 200, 'Public statistics fetched', {
+      students,
+      teachers,
+      users,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+module.exports = { getStudentDashboard, getTeacherDashboard, getPublicStats };

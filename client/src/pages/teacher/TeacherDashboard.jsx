@@ -3,8 +3,16 @@ import { AuthContext } from '../../context/AuthContext';
 import API from '../../services/api';
 import Navbar from '../../components/layout/Navbar';
 import Sidebar from '../../components/layout/Sidebar';
-import { BookOpen, Users, Clock, Video, CheckCircle2, Plus } from 'lucide-react';
+import {
+  BookOpen,
+  Users,
+  Clock,
+  Video,
+  CheckCircle2,
+  Plus
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
+import './style.css';
 
 const TeacherDashboard = () => {
   const { user } = useContext(AuthContext);
@@ -27,61 +35,70 @@ const TeacherDashboard = () => {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-light)' }}>
+    <div className="teacher-dashboard">
       <Navbar />
-      <div style={{ display: 'flex' }}>
+
+      <div className="teacher-dashboard-layout">
         <Sidebar />
-        <main style={{ flex: 1, padding: '2rem', maxWidth: '1200px' }}>
+
+        <main className="teacher-dashboard-main">
           {/* Welcome Banner */}
-          <div style={{
-            background: 'linear-gradient(135deg, var(--academic-green) 0%, #047857 100%)',
-            color: '#fff',
-            padding: '2rem',
-            borderRadius: '12px',
-            marginBottom: '2rem',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            boxShadow: 'var(--shadow-md)'
-          }}>
-            <div>
-              <h1 style={{ margin: 0, fontSize: '1.8rem' }}>Welcome, Prof. {user?.name}!</h1>
-              <p style={{ margin: '0.5rem 0 0', opacity: 0.9, fontSize: '0.95rem' }}>
-                Manage course sections, assignments, attendance logs, and real-time live video sessions.
+          <section className="teacher-welcome-banner">
+            <div className="teacher-welcome-content">
+              <h1>Welcome, Prof. {user?.name}!</h1>
+              <p>
+                Manage course sections, assignments, attendance logs, and
+                real-time live video sessions.
               </p>
             </div>
-            <Link to="/classes" style={{
-              background: '#ffffff',
-              color: 'var(--academic-green)',
-              padding: '0.65rem 1.25rem',
-              borderRadius: '8px',
-              textDecoration: 'none',
-              fontWeight: 'bold',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              boxShadow: 'var(--shadow-sm)'
-            }}>
+
+            <Link to="/classes" className="teacher-create-class-btn">
               <Plus size={18} />
               <span>Create Class</span>
             </Link>
-          </div>
+          </section>
 
           {loading ? (
-            <div>Loading statistics...</div>
-          ) : (
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-              gap: '1.25rem',
-              marginBottom: '2.5rem'
-            }}>
-              <StatCard title="Active Classes" value={summary?.totalClasses || 0} icon={<BookOpen color="#059669" />} color="#d1fae5" />
-              <StatCard title="Enrolled Students" value={summary?.totalStudents || 0} icon={<Users color="#1e3a8a" />} color="#dbeafe" />
-              <StatCard title="Pending Tests" value={summary?.pendingAssignments || 0} icon={<Clock color="#d97706" />} color="#fef3c7" />
-              <StatCard title="Today's Live Classes" value={summary?.todayLiveClasses || 0} icon={<Video color="#dc2626" />} color="#fee2e2" />
-              <StatCard title="Avg Attendance" value={`${summary?.avgAttendance || 100}%`} icon={<CheckCircle2 color="#059669" />} color="#d1fae5" />
+            <div className="teacher-loading">
+              Loading statistics...
             </div>
+          ) : (
+            <section className="teacher-stats-grid">
+              <StatCard
+                title="Active Classes"
+                value={summary?.totalClasses || 0}
+                icon={<BookOpen color="#059669" />}
+                color="#d1fae5"
+              />
+
+              <StatCard
+                title="Enrolled Students"
+                value={summary?.totalStudents || 0}
+                icon={<Users color="#1e3a8a" />}
+                color="#dbeafe"
+              />
+
+              <StatCard
+                title="Pending Tests"
+                value={summary?.pendingAssignments || 0}
+                icon={<Clock color="#d97706" />}
+                color="#fef3c7"
+              />
+
+              <StatCard
+                title="Today's Live Classes"
+                value={summary?.todayLiveClasses || 0}
+                icon={<Video color="#dc2626" />}
+                color="#fee2e2"
+              />
+
+              <StatCard
+                title="Avg Attendance"
+                value={`${summary?.avgAttendance ?? 100}%`}
+                icon={<CheckCircle2 color="#059669" />}
+                color="#d1fae5"
+              />
+            </section>
           )}
         </main>
       </div>
@@ -90,24 +107,19 @@ const TeacherDashboard = () => {
 };
 
 const StatCard = ({ title, value, icon, color }) => (
-  <div style={{
-    background: '#ffffff',
-    padding: '1.25rem',
-    borderRadius: '12px',
-    border: '1px solid var(--border-color)',
-    boxShadow: 'var(--shadow-sm)',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '1rem'
-  }}>
-    <div style={{ background: color, padding: '0.85rem', borderRadius: '10px', display: 'flex' }}>
+  <article className="teacher-stat-card">
+    <div
+      className="teacher-stat-icon"
+      style={{ backgroundColor: color }}
+    >
       {icon}
     </div>
-    <div>
-      <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block' }}>{title}</span>
-      <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--text-dark)' }}>{value}</span>
+
+    <div className="teacher-stat-info">
+      <span className="teacher-stat-title">{title}</span>
+      <span className="teacher-stat-value">{value}</span>
     </div>
-  </div>
+  </article>
 );
 
 export default TeacherDashboard;

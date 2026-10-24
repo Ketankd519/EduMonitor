@@ -1,21 +1,23 @@
 const express = require('express');
-const router = express.Router();
-
 const {
   startLiveClass,
-  endLiveClass,
-  getLiveClassById,
   getActiveLiveClass,
+  getClassLiveSessions,
+  endLiveClass,
+  getStudentLiveTicker
 } = require('../controllers/liveClassController');
-
 const { protect } = require('../middleware/authMiddleware');
-const { requireClassMember } = require('../middleware/classAccessMiddleware');
+const { authorize } = require('../middleware/roleMiddleware');
+
+const router = express.Router();
 
 router.use(protect);
 
-router.post('/class/:classId/start', requireClassMember('classId'), startLiveClass);
-router.get('/class/:classId/active', requireClassMember('classId'), getActiveLiveClass);
-router.post('/:liveClassId/end', endLiveClass); // ownership verified inside controller
-router.get('/:liveClassId', getLiveClassById); // membership verified inside controller
+router.get('/live-ticker', getStudentLiveTicker);
+router.get('/active/:classId', getActiveLiveClass);
+router.get('/class/:classId', authorize('TEACHER'), getClassLiveSessions);
+router.post('/start', authorize('TEACHER'), startLiveClass);
+router.post('/end/:id', authorize('TEACHER'), endLiveClass);
+router.post('/:id/end', authorize('TEACHER'), endLiveClass);
 
 module.exports = router;

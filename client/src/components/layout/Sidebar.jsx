@@ -1,21 +1,28 @@
-import React, { useContext } from 'react';
+import React, { useContext, useEffect, useRef } from 'react';
 import { NavLink } from 'react-router-dom';
 import { AuthContext } from '../../context/AuthContext';
+import { useSidebar } from '../../context/SidebarContext';
 import {
   LayoutDashboard,
   BookOpen,
   FileCheck,
   CalendarCheck,
   Award,
-  Video,
   BarChart3,
   User,
-  LogOut
+  LogOut,
+  X,
+  GraduationCap
 } from 'lucide-react';
+import './Layouts.css';
 
 const Sidebar = () => {
   const { user, logout } = useContext(AuthContext);
+  const { isSidebarOpen, closeSidebar } = useSidebar();
   const isTeacher = user?.role === 'TEACHER';
+
+  const sidebarRef = useRef(null);
+  const closeBtnRef = useRef(null);
 
   const navItems = isTeacher
     ? [
@@ -37,63 +44,120 @@ const Sidebar = () => {
         { name: 'Profile', path: '/profile', icon: <User size={20} /> }
       ];
 
-  return (
-    <aside style={{
-      width: '240px',
-      background: '#ffffff',
-      borderRight: '1px solid var(--border-color)',
-      minHeight: 'calc(100vh - 64px)',
-      display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'space-between',
-      padding: '1.5rem 0.75rem'
-    }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-        {navItems.map((item) => (
-          <NavLink
-            key={item.path}
-            to={item.path}
-            style={({ isActive }) => ({
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.75rem',
-              padding: '0.75rem 1rem',
-              borderRadius: '8px',
-              textDecoration: 'none',
-              fontWeight: '500',
-              fontSize: '0.95rem',
-              color: isActive ? '#ffffff' : 'var(--text-muted)',
-              background: isActive ? 'var(--primary-blue)' : 'transparent',
-              transition: 'all 0.2s ease'
-            })}
-          >
-            {item.icon}
-            <span>{item.name}</span>
-          </NavLink>
-        ))}
-      </div>
+  // Focus trap for mobile drawer when opened
+  useEffect(() => {
+    if (!isSidebarOpen) return;
 
-      <button
-        onClick={logout}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.75rem',
-          padding: '0.75rem 1rem',
-          borderRadius: '8px',
-          border: 'none',
-          background: '#fef2f2',
-          color: 'var(--danger-red)',
-          fontWeight: '600',
-          fontSize: '0.95rem',
-          cursor: 'pointer',
-          marginTop: 'auto'
-        }}
+    // Focus close button initially
+    const timer = setTimeout(() => {
+      closeBtnRef.current?.focus();
+    }, 50);
+
+    const handleFocusTrap = (e) => {
+      if (e.key !== 'Tab' || !sidebarRef.current) return;
+
+      const focusableElements = sidebarRef.current.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusableElements.length === 0) return;
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+
+      if (e.shiftKey) {
+        if (document.activeElement === firstElement) {
+          e.preventDefault();
+          lastElement.focus();
+        }
+      } else {
+        if (document.activeElement === lastElement) {
+          e.preventDefault();
+          firstElement.focus();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleFocusTrap);
+
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('keydown', handleFocusTrap);
+    };
+  }, [isSidebarOpen]);
+
+  const handleNavLinkClick = () => {
+    closeSidebar();
+  };
+
+  const handleLogoutClick = () => {
+    closeSidebar();
+    logout();
+  };
+
+  return (
+    <>
+      {/* Dimmed backdrop for mobile drawer */}
+      <div
+        className={`sidebar-backdrop ${isSidebarOpen ? 'open' : ''}`}
+        onClick={closeSidebar}
+        aria-hidden="true"
+      />
+
+      <aside
+        id="sidebar-drawer"
+        ref={sidebarRef}
+        className={`sidebar ${isTeacher ? 'sidebar--teacher' : 'sidebar--student'} ${
+          isSidebarOpen ? 'sidebar--open' : ''
+        }`}
+        aria-label="Navigation Menu"
+        aria-modal={isSidebarOpen ? 'true' : undefined}
       >
-        <LogOut size={20} />
-        <span>Logout</span>
-      </button>
-    </aside>
+        {/* Mobile-only Drawer Header */}
+        <div className="sidebar-mobile-header">
+          <div className="sidebar-mobile-brand">
+            <GraduationCap size={24} color={isTeacher ? 'var(--academic-green)' : 'var(--primary-blue)'} />
+            <span className="sidebar-mobile-title">EduMonitor</span>
+            <span className={`sidebar-role-badge ${isTeacher ? 'sidebar-role-badge--teacher' : ''}`}>
+              {user?.role?.toLowerCase()}
+            </span>
+          </div>
+
+          <button
+            ref={closeBtnRef}
+            type="button"
+            onClick={closeSidebar}
+            className="sidebar-close-btn"
+            aria-label="Close navigation sidebar"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <nav className="sidebar-nav" role="navigation">
+          {navItems.map((item) => (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              onClick={handleNavLinkClick}
+              className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}
+            >
+              {item.icon}
+              <span>{item.name}</span>
+            </NavLink>
+          ))}
+        </nav>
+
+        <button
+          type="button"
+          onClick={handleLogoutClick}
+          className="sidebar-logout"
+          aria-label="Logout of account"
+        >
+          <LogOut size={20} />
+          <span>Logout</span>
+        </button>
+      </aside>
+    </>
   );
 };
 

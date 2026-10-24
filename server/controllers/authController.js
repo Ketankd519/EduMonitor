@@ -1,4 +1,3 @@
-const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const StudentProfile = require('../models/StudentProfile');
@@ -111,7 +110,16 @@ exports.login = async (req, res, next) => {
 // @access  Private
 exports.getMe = async (req, res, next) => {
   try {
-    const user = await User.findById(req.user.id);
+    const userId = req.user?.id || req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Not authorized.' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
     let profile = null;
 
     if (user.role === 'STUDENT') {
@@ -130,67 +138,66 @@ exports.getMe = async (req, res, next) => {
   }
 };
 
-// @desc    Forgot Password - Create Reset Token
-// @route   POST /api/auth/forgot-password
+// ==========================================
+// NEW FORGOT PASSWORD FLOW
+// ==========================================
+
+// @desc    Check if email exists in database (Step 1 of forgot password)
+// @route   POST /api/auth/check-email
 // @access  Public
-exports.forgotPassword = async (req, res, next) => {
+exports.checkEmail = async (req, res, next) => {
   try {
     const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Please provide an email address.' });
+    }
+
     const user = await User.findOne({ email });
 
     if (!user) {
-      return res.status(404).json({ success: false, message: 'There is no user registered with that email.' });
+      return res.status(404).json({ success: false, message: 'Email not found in our system.' });
     }
 
-    const resetToken = crypto.randomBytes(20).toString('hex');
-    user.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
-    user.resetPasswordExpire = Date.now() + 10 * 60 * 1000; // 10 minutes
-
-    await user.save({ validateBeforeSave: false });
-
-    res.status(200).json({
-      success: true,
-      message: 'Reset token generated successfully.',
-      resetToken // Returned directly for local development testing
+    res.status(200).json({ 
+      success: true, 
+      message: 'Email verified successfully.' 
     });
   } catch (error) {
     next(error);
   }
 };
 
-// @desc    Reset Password
-// @route   POST /api/auth/reset-password/:resetToken
+// @desc    Directly update user password (Step 2 of forgot password)
+// @route   POST /api/auth/update-password
 // @access  Public
-exports.resetPassword = async (req, res, next) => {
+exports.updatePassword = async (req, res, next) => {
   try {
-    const resetPasswordToken = crypto
-      .createHash('sha256')
-      .update(req.params.resetToken)
-      .digest('hex');
+    const { email, newPassword } = req.body;
 
-    const user = await User.findOne({
-      resetPasswordToken,
-      resetPasswordExpire: { $gt: Date.now() }
-    });
+    if (!email || !newPassword) {
+      return res.status(400).json({ success: false, message: 'Please provide email and new password.' });
+    }
 
+    if (newPassword.length < 6) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 6 characters long.' });
+    }
+
+    const user = await User.findOne({ email });
     if (!user) {
-      return res.status(400).json({ success: false, message: 'Invalid or expired password reset token.' });
+      return res.status(404).json({ success: false, message: 'User not found.' });
     }
 
-    if (req.body.password !== req.body.confirmPassword) {
-      return res.status(400).json({ success: false, message: 'Passwords do not match.' });
-    }
-
+    // Hash the new password
     const salt = await bcrypt.genSalt(10);
-    user.password = await bcrypt.hash(req.body.password, salt);
-    user.resetPasswordToken = undefined;
-    user.resetPasswordExpire = undefined;
-
+    user.password = await bcrypt.hash(newPassword, salt);
+    
+    // Save updated password
     await user.save();
 
-    res.status(200).json({
-      success: true,
-      message: 'Password reset successful. You can now login.'
+    res.status(200).json({ 
+      success: true, 
+      message: 'Password updated successfully. You can now login.' 
     });
   } catch (error) {
     next(error);

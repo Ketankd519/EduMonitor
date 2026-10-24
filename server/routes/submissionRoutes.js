@@ -1,7 +1,8 @@
 const express = require('express');
 const {
   submitAssignment,
-  getAssignmentSubmissions
+  getAssignmentSubmissions,
+  getMySubmissions
 } = require('../controllers/submissionController');
 const { protect } = require('../middleware/authMiddleware');
 const { authorize } = require('../middleware/roleMiddleware');
@@ -12,5 +13,6 @@ router.use(protect);
 
 router.post('/', authorize('STUDENT'), submitAssignment);
 router.get('/assignment/:assignmentId', authorize('TEACHER'), getAssignmentSubmissions);
+router.get('/assignment/:assignmentId/my-submissions', authorize('STUDENT'), getMySubmissions);
 
 module.exports = router;

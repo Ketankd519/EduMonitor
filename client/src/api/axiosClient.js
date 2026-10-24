@@ -9,7 +9,11 @@ const axiosClient = axios.create({
 
 // Attach JWT to every outgoing request
 axiosClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('edumonitor_token');
+  const token =
+    localStorage.getItem('token') ||
+    localStorage.getItem('edumonitor_token') ||
+    sessionStorage.getItem('token') ||
+    sessionStorage.getItem('edumonitor_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -21,8 +25,13 @@ axiosClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
+      localStorage.removeItem('token');
       localStorage.removeItem('edumonitor_token');
       localStorage.removeItem('edumonitor_user');
+      localStorage.removeItem('edumonitor_remember');
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('edumonitor_token');
+      sessionStorage.removeItem('edumonitor_user');
       if (window.location.pathname !== '/login') {
         window.location.href = '/login';
       }

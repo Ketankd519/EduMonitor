@@ -1,8 +1,10 @@
 const Class = require('../models/Class');
 const ClassMember = require('../models/ClassMember');
+const StudentProfile = require('../models/StudentProfile');
 const Post = require('../models/Post');
 const Note = require('../models/Note');
 const Assignment = require('../models/Assignment');
+const mongoose = require('mongoose');
 
 // Helper function to generate standardized class codes
 const generateClassCode = (subjectCode, section) => {
@@ -123,6 +125,46 @@ exports.getMyClasses = async (req, res, next) => {
   }
 };
 
+// @desc    Get a class by ID
+// @route   GET /api/classes/:classId
+// @access  Private (class teacher or enrolled student)
+exports.getClassById = async (req, res, next) => {
+  try {
+    const { classId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(classId)) {
+      return res.status(400).json({ success: false, message: 'Invalid classroom ID.' });
+    }
+
+    const classDoc = await Class.findById(classId).populate('teacher', 'name email avatar');
+    if (!classDoc) {
+      return res.status(404).json({ success: false, message: 'Classroom not found.' });
+    }
+
+    const isTeacher = classDoc.teacher._id.toString() === req.user._id.toString();
+    const isStudent =
+      req.user.role === 'STUDENT' &&
+      await ClassMember.exists({ class: classDoc._id, student: req.user._id });
+
+    if (!isTeacher && !isStudent) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have access to this classroom.'
+      });
+    }
+
+    const enrolledStudentsCount = await ClassMember.countDocuments({ class: classDoc._id });
+    const classObj = classDoc.toObject();
+    classObj.enrolledStudentsCount = enrolledStudentsCount;
+
+    return res.status(200).json({
+      success: true,
+      class: classObj
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // @desc    Leave a class (Student only)
 // @route   POST /api/classes/:classId/leave
 // @access  Private (Student)
@@ -175,6 +217,51 @@ exports.deleteClass = async (req, res, next) => {
     res.status(200).json({
       success: true,
       message: 'Classroom and associated records deleted successfully.'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get enrolled students roster for a class (Teacher only)
+// @route   GET /api/classes/:classId/roster
+// @access  Private (Teacher who owns the class)
+exports.getClassRoster = async (req, res, next) => {
+  try {
+    const { classId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(classId)) {
+      return res.status(400).json({ success: false, message: 'Invalid classroom ID.' });
+    }
+
+    const classDoc = await Class.findById(classId);
+    if (!classDoc) {
+      return res.status(404).json({ success: false, message: 'Classroom not found.' });
+    }
+
+    if (classDoc.teacher.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Not authorized to view this classroom roster.' });
+    }
+
+    const members = await ClassMember.find({ class: classId })
+      .populate('student', 'name')
+      .sort({ createdAt: 1 });
+
+    const studentIds = members.map((m) => m.student?._id || m.student);
+    const profiles = await StudentProfile.find({ user: { $in: studentIds } });
+    const profileMap = new Map(profiles.map((p) => [p.user.toString(), p.rollNumber]));
+
+    const roster = members
+      .filter((m) => m.student)
+      .map((m) => ({
+        _id: m.student._id,
+        name: m.student.name,
+        rollNumber: profileMap.get(m.student._id.toString()) || '—'
+      }));
+
+    return res.status(200).json({
+      success: true,
+      count: roster.length,
+      roster
     });
   } catch (error) {
     next(error);

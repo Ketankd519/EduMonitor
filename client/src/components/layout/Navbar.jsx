@@ -1,72 +1,87 @@
 import React, { useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
-import { GraduationCap, LogOut, User as UserIcon, Bell } from 'lucide-react';
+import { useSidebar } from '../../context/SidebarContext';
+import { useLiveTicker } from '../../context/LiveTickerContext';
+import { GraduationCap, LogOut, User as UserIcon, Menu } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import NavbarTicker from './NavbarTicker';
+import NotificationBell from './NotificationBell';
+import './Layouts.css';
 
 const Navbar = () => {
   const { user, logout } = useContext(AuthContext);
+  const { isSidebarOpen, toggleSidebar, hamburgerRef } = useSidebar();
+  const { liveItems } = useLiveTicker();
+
+  const isStudent = user?.role === 'STUDENT';
+  const hasLiveItems = isStudent && liveItems && liveItems.length > 0;
 
   return (
-    <nav style={{
-      height: '64px',
-      background: '#ffffff',
-      borderBottom: '1px solid var(--border-color)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      padding: '0 1.5rem',
-      position: 'sticky',
-      top: 0,
-      zIndex: 100
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-        <GraduationCap size={32} color="var(--primary-blue)" />
-        <span style={{ fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--primary-blue)' }}>
-          EduMonitor
-        </span>
-      </div>
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
-        <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
-          <Bell size={20} />
-        </button>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', borderLeft: '1px solid var(--border-color)', paddingLeft: '1.25rem' }}>
-          <div style={{
-            width: '36px',
-            height: '36px',
-            borderRadius: '50%',
-            background: 'var(--primary-blue)',
-            color: '#fff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontWeight: 'bold',
-            fontSize: '0.9rem'
-          }}>
-            {user?.name ? user.name.charAt(0).toUpperCase() : <UserIcon size={18} />}
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <span style={{ fontSize: '0.9rem', fontWeight: '600', color: 'var(--text-dark)' }}>{user?.name}</span>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'capitalize' }}>
-              {user?.role?.toLowerCase()}
-            </span>
-          </div>
-
-          <button onClick={logout} title="Logout" style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            color: 'var(--danger-red)',
-            marginLeft: '0.5rem',
-            padding: '0.25rem'
-          }}>
-            <LogOut size={20} />
+    <header className="navbar-header">
+      <nav className="navbar" role="navigation" aria-label="Main Navigation">
+        {/* Left Section: Mobile Hamburger Button & Brand Logo */}
+        <div className="navbar-left">
+          <button
+            ref={hamburgerRef}
+            type="button"
+            onClick={toggleSidebar}
+            className="navbar-hamburger"
+            aria-label={isSidebarOpen ? 'Close navigation sidebar' : 'Open navigation sidebar'}
+            aria-expanded={isSidebarOpen}
+            aria-controls="sidebar-drawer"
+          >
+            <Menu size={22} aria-hidden="true" />
           </button>
+
+          <Link to={user?.role === 'TEACHER' ? '/teacher/dashboard' : '/student/dashboard'} className="navbar-brand">
+            <GraduationCap size={32} color="var(--primary-blue)" />
+            <span className="navbar-title">EduMonitor</span>
+          </Link>
         </div>
-      </div>
-    </nav>
+
+        {/* Center Section: Desktop Live Notification Ticker (Student only) */}
+        {isStudent && (
+          <div className="navbar-center-ticker">
+            <NavbarTicker mode="desktop" />
+          </div>
+        )}
+
+        {/* Right Section: Notification Bell, User Avatar, Name/Role, and Logout */}
+        <div className="navbar-actions">
+          <NotificationBell />
+
+          <div className="navbar-user-section">
+            <Link to="/profile" className="navbar-avatar-link" title="My Profile">
+              <div className="navbar-avatar">
+                {user?.name ? user.name.charAt(0).toUpperCase() : <UserIcon size={18} />}
+              </div>
+            </Link>
+
+            <div className="navbar-user-info">
+              <span className="navbar-user-name">{user?.name}</span>
+              <span className="navbar-user-role">{user?.role?.toLowerCase()}</span>
+            </div>
+
+            <button
+              type="button"
+              onClick={logout}
+              title="Logout"
+              className="navbar-logout"
+              aria-label="Logout"
+            >
+              <LogOut size={20} />
+            </button>
+          </div>
+        </div>
+      </nav>
+
+      {/* Mobile Slim Ticker Row: Rendered underneath navbar only when live items exist on student view */}
+      {hasLiveItems && (
+        <div className="navbar-mobile-ticker-row">
+          <NavbarTicker mode="mobile" />
+        </div>
+      )}
+    </header>
   );
 };
 

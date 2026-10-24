@@ -1,12 +1,20 @@
 const express = require('express');
-const router = express.Router();
-
-const { analyzeFrame } = require('../controllers/monitoringController');
+const {
+  logMonitoringEvent,
+  getLiveClassMonitoring,
+  getLiveClassReport,
+  getStudentProgressAnalytics
+} = require('../controllers/monitoringController');
 const { protect } = require('../middleware/authMiddleware');
 const { authorize } = require('../middleware/roleMiddleware');
 
+const router = express.Router();
+
 router.use(protect);
 
-router.post('/analyze-frame', authorize('student'), analyzeFrame);
+router.post('/event', logMonitoringEvent);
+router.get('/live/:liveClassId', authorize('TEACHER'), getLiveClassMonitoring);
+router.get('/report/:liveClassId', getLiveClassReport);
+router.get('/student/progress', authorize('STUDENT'), getStudentProgressAnalytics);
 
 module.exports = router;

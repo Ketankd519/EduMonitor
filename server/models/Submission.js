@@ -10,7 +10,14 @@ const submissionSchema = new mongoose.Schema({
   }],
   score: { type: Number, required: true },
   percentage: { type: Number, required: true },
+  maxMarks: { type: Number, default: 0 },
+  attemptNumber: { type: Number, default: 1 },
+  correctCount: { type: Number, default: 0 },
+  incorrectCount: { type: Number, default: 0 },
+  unansweredCount: { type: Number, default: 0 },
   submittedAt: { type: Date, default: Date.now }
 }, { timestamps: true });
+
+submissionSchema.index({ assignment: 1, student: 1, attemptNumber: 1 }, { unique: true });
 
 module.exports = mongoose.model('Submission', submissionSchema);

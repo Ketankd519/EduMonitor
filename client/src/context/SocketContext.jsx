@@ -1,44 +1,54 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useEffect, useState, useContext } from 'react';
 import { io } from 'socket.io-client';
-import { useAuth } from './AuthContext';
+import { AuthContext } from './AuthContext';
 
-const SocketContext = createContext(null);
+export const SocketContext = createContext();
 
-/**
- * Provides a single shared Socket.IO connection for the whole app,
- * authenticated with the same JWT used for REST calls. Connects when a
- * user is logged in and disconnects on logout, rather than each component
- * managing its own connection.
- */
-export function SocketProvider({ children }) {
-  const { user } = useAuth();
+export const SocketProvider = ({ children }) => {
+  const auth = useContext(AuthContext);
+  const token = auth?.token || localStorage.getItem('token');
   const [socket, setSocket] = useState(null);
 
   useEffect(() => {
-    if (!user) {
+    if (token) {
+      const serverHost = window.location.hostname || 'localhost';
+      const socketUrl = `http://${serverHost}:5000`;
+
+      const newSocket = io(socketUrl, {
+        transports: ['websocket', 'polling'],
+        withCredentials: true,
+        auth: { token }
+      });
+
+      const registerUser = () => {
+        if (auth?.user?._id) {
+          newSocket.emit('register-user', { userId: auth.user._id, token });
+        }
+      };
+
+      newSocket.on('connect', registerUser);
+      newSocket.on('reconnect', registerUser);
+
+      setSocket(newSocket);
+
+      return () => {
+        newSocket.close();
+      };
+    } else {
+      if (socket) socket.close();
       setSocket(null);
-      return;
     }
+  }, [token]);
 
-    const token = localStorage.getItem('edumonitor_token');
-    if (!token) return;
+  useEffect(() => {
+    if (socket && auth?.user?._id && token) {
+      socket.emit('register-user', { userId: auth.user._id, token });
+    }
+  }, [socket, auth?.user?._id, token]);
 
-    const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
-    const newSocket = io(socketUrl, {
-      auth: { token },
-      autoConnect: true,
-    });
-
-    setSocket(newSocket);
-
-    return () => {
-      newSocket.disconnect();
-    };
-  }, [user]);
-
-  return <SocketContext.Provider value={socket}>{children}</SocketContext.Provider>;
-}
-
-export function useSocket() {
-  return useContext(SocketContext);
-}
+  return (
+    <SocketContext.Provider value={socket}>
+      {children}
+    </SocketContext.Provider>
+  );
+};

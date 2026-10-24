@@ -1,0 +1,222 @@
+
+/* ===== Confirmation Modal Overlay ===== */
+
+.confirmation-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+/* ===== Confirmation Modal Container ===== */
+
+.confirmation-modal {
+  background: #ffffff;
+  width: 100%;
+  max-width: 420px;
+  padding: 1.75rem;
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  position: relative;
+  box-sizing: border-box;
+}
+
+/* ===== Close Button ===== */
+
+.confirmation-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ===== Modal Content ===== */
+
+.confirmation-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+/* ===== Warning and Danger Icons ===== */
+
+.confirmation-icon {
+  padding: 0.6rem;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.confirmation-icon.danger {
+  background: #fee2e2;
+  color: var(--danger-red);
+}
+
+.confirmation-icon.warning {
+  background: #fef3c7;
+  color: var(--warning-amber);
+}
+
+/* ===== Title and Description ===== */
+
+.confirmation-message {
+  min-width: 0;
+}
+
+.confirmation-title {
+  margin: 0 0 0.35rem;
+  color: var(--text-dark);
+  font-size: 1.15rem;
+}
+
+.confirmation-description {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+/* ===== Action Buttons ===== */
+
+.confirmation-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.confirmation-button {
+  border: none;
+  padding: 0.55rem 1.1rem;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.confirmation-cancel {
+  background: #f1f5f9;
+  color: var(--text-dark);
+}
+
+.confirmation-confirm {
+  background: var(--primary-blue);
+  color: #ffffff;
+}
+
+.confirmation-danger {
+  background: var(--danger-red);
+  color: #ffffff;
+}
+
+
+/* ===== Empty State ===== */
+
+.empty-state {
+  background: #ffffff;
+  border: 1px dashed var(--border-color);
+  border-radius: 12px;
+  padding: 3.5rem 2rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: 1.5rem 0;
+}
+
+/* ===== Empty State Icon ===== */
+
+.empty-state-icon {
+  background: #f1f5f9;
+  padding: 1rem;
+  border-radius: 50%;
+  color: var(--primary-blue);
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ===== Empty State Title ===== */
+
+.empty-state-title {
+  margin: 0 0 0.4rem;
+  color: var(--text-dark);
+  font-size: 1.15rem;
+}
+
+/* ===== Empty State Description ===== */
+
+.empty-state-description {
+  margin: 0 0 1.25rem;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  max-width: 400px;
+}
+
+/* ===== Empty State Action Button ===== */
+
+.empty-state-action {
+  background: var(--primary-blue);
+  color: #fff;
+  border: none;
+  padding: 0.6rem 1.25rem;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+
+/* ===== Loading Spinner ===== */
+
+.loading-spinner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem;
+  gap: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* ===== Spinner Animation ===== */
+
+.loading-spinner-icon {
+  animation: spin 1s linear infinite;
+}
+
+/* ===== Loading Message ===== */
+
+.loading-spinner-message {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+/* ===== Spin Keyframes ===== */
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
